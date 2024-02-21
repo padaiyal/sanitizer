@@ -1,0 +1,50 @@
+/*Tags*/
+h1 {
+    margin: 10px;
+}
+
+/*Ids*/
+#title {
+    margin: 10px;
+}
+
+#upload_button {
+    width:90%;
+    align-content:center;
+    margin: 30px auto
+}
+
+#display_card {
+    width: 90%;
+    height: 750px;
+    margin: 20px auto;
+}
+
+#spinner_container {
+    margin: 225px auto;
+}
+#spinner {
+    height: 60px;
+    width: 60px;
+    margin: auto;
+    display: flex;
+    position: absolute;
+}
+#overlay-spinner {
+    position: absolute;
+    display: none;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0,0,0,0.5);
+}
+
+#scrollable_content {
+    overflow-y: auto;
+    max-height:620px
+}
+
+#download_button {
+    float: right;
+}
