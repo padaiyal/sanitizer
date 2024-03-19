@@ -1,47 +1,55 @@
 <!doctype html>
-<html lang="">
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sanitizer</title>
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sanitizer</title>
+    <meta name="theme-color" content="#fafafa">
+    <!-- Custom styles -->
+    <link href="css/style.css" rel="stylesheet" type="text/css" />
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <!-- https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.7.1/styles/github.min.css -->
+    <link rel="stylesheet" href="css/github.min.css" />
+    <!-- https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css -->
+    <link rel="stylesheet" type="text/css" href="css/diff2html.min.css" />
 
-  <meta name="theme-color" content="#fafafa">
+    <script src="script/lib/bootstrap.bundle.min.js"></script>
+    <script src="script/lib/js-yaml.min.js"></script>
+    <!-- https://github.com/JSONPath-Plus/JSONPath -->
+    <script src="script/lib/jsonpath-cjs-min.js"></script>
+    <!-- https://github.com/rtfpessoa/diff2html -->
+    <script src="script/lib/diff2html-ui.min.js"></script>
+    <!-- http://incaseofstairs.com/jsdiff/diff.js -->
+    <script src="script/lib/diff.js"></script>
+    <script src="script/script.js"></script>
+  </head>
 
-  <!-- Custom styles -->
-  <link href="css/bootstrap.min.css" rel="stylesheet">
-  <link href="css/style.css" rel="stylesheet" type="text/css" />
+  <body>
+    <h1 id="title">Sensitive Info Sanitizer</h1>
+    <div id="uploader">
+      <input type="file" id="upload_button" name="upload_button" class="form-control"
+             onchange="sanitizeContent(file=this.files[0])" accept=".har"/>
+    </div>
 
-  <!-- Scripts -->
-  <script src="script/bootstrap.bundle.min.js"></script>
-  <script src="script/script.js"></script>
-</head>
-
-<body>
-  <h1 id="title">Sensitive Info Sanitizer</h1>
-  <div id="uploader">
-    <input type="file" id="upload_button" name="upload_button" class="form-control" accept=".har" onchange="getFile(event)"/>
-  </div>
-
-  <div id="display_panel">
-    <div id="display_card" class="card">
-      <div class="card-header" id="card_header">
-        Sanitized file
-      </div>
-      <div class="card-body">
+    <div id="display_panel" hidden>
+      <div id="display_card" class="card">
+        <div id="buttons">
+          <input type="button" id="view_rules_button" class="btn btn-secondary" name="view_rules_button"
+                 value="View Rules File" disabled>
+          <input type="button" id="download_button" class="btn btn-success" name="download_button"
+                 value="Download Sanitized File" onclick="downloadSanitizedFile()" disabled>
+        </div>
+        <div class="card-body">
           <div id="overlay-spinner">
             <div class="w-100 d-flex justify-content-center align-items-center" id="spinner_container">
               <div class="spinner-border text-success" id="spinner"></div>
             </div>
           </div>
-        <div class="scrollable" id="scrollable_content">
-          <p class="card-text" id="output_content"></p>
+          <div id="sanitized_diff_div"></div>
         </div>
-      </div>
-      <div class="card-footer text-body-secondary" id="downloader">
-          <input type="button" id="download_button" class="btn btn-success" name="download_button" value="Download File" onclick="downloadContent(event)" disabled>
+        <div class="card-footer text-body-secondary" id="downloader"></div>
       </div>
     </div>
-  </div>
-</body>
+  </body>
 </html>

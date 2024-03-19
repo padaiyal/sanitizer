@@ -1,0 +1,12 @@
+description: HTTP Archive (HAR) files are used to store info on requests made in a browser context and the correspondign responses. This might contain sensitive information such as tokens, cookies, IP addresses etc.
+format: json
+rules:
+    "$..cookies.[?(@ && @.name == 'OTZ')][value]":
+        description: Remove the OTZ cookie value.
+        action: remove
+    "$..headers..[?(@ && @.name == 'Cookie')][value]":
+        description: Remove the Cookie header value.
+        action: remove
+    "$..params..[?(@ && @.name == 'password')][value]":
+        description: Remove the password param.
+        action: remove
