@@ -5,7 +5,8 @@ h1 {
 
 /*Ids*/
 #title {
-    margin: 10px;
+    width: 90%;
+    margin: 20px auto;
 }
 
 #upload_button {
@@ -16,7 +17,7 @@ h1 {
 
 #display_card {
     width: 90%;
-    height: 750px;
+    min-height: 750px;
     margin: 20px auto;
 }
 
@@ -42,9 +43,13 @@ h1 {
 
 #scrollable_content {
     overflow-y: auto;
-    max-height:620px
+    max-height: 620px;
 }
 
-#download_button {
-    float: right;
+#buttons {
+    align-self: end;
+}
+
+#view_rules_button, #download_button {
+    margin: 10px 10px 0px 0px;
 }
