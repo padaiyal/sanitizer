@@ -1,0 +1,15 @@
+{
+  "Diff2HtmlConfiguration": {
+    "drawFileList": false,
+    "fileListToggle": false,
+    "fileListStartVisible": false,
+    "fileContentToggle": true,
+    "matching": "lines",
+    "outputFormat": "line-by-line",
+    "synchronisedScroll": true,
+    "highlight": true,
+    "renderNothingWhenEmpty": false
+  },
+  "SupportedFileExtensions":  ["har"],
+  "SupportedActions": ["remove"]
+}
