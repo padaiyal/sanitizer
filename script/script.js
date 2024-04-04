@@ -1,21 +1,51 @@
-const diff2HtmlConfiguration = {
-    drawFileList: false,
-    fileListToggle: false,
-    fileListStartVisible: false,
-    fileContentToggle: true,
-    matching: 'lines',
-    outputFormat: 'line-by-line',
-    synchronisedScroll: true,
-    highlight: true,
-    renderNothingWhenEmpty: false,
-};
-
+let config = {};
 let result = null;
 let sanitizedFileName = null;
-let supportedFileExtensions = ['har'];
-let supportedActions = ['remove'];
 
-const setConfigItem = (path, value, obj) => {
+function init() {
+    console.log('Initializing...')
+    fetch("script/config.json")
+        .then(response => response.json())
+        .then((data) => {
+            config = data;
+            for (const supportedFileExtension of getConfig("SupportedFileExtensions", [])) {
+                // Load rules
+                const ruleFilePath = "rules/" + supportedFileExtension + ".yaml";
+                console.log("Loading " + ruleFilePath);
+                fetch(ruleFilePath)
+                    .then(response => response.text())
+                    .then((data) => {
+                        localStorage.setItem(supportedFileExtension, data);
+                    }).catch(error => errorFollowUp(error));
+            }
+        }).catch(error => errorFollowUp(error));
+}
+
+function errorFollowUp(message) {
+    console.error(message);
+    alert(message);
+}
+
+function getConfig(key, defaultValue=null) {
+    const typeOfKey = typeof key;
+    let errorMessage = null;
+
+    if(typeOfKey !== "string") {
+        errorMessage = `InvalidConfigKeyType: ${key} is of type ${typeOfKey}.
+                        It should be a string.`;
+    } else if(!(key in config)) {
+        errorMessage = `ConfigKeyNotFound: ${key} not in config.`;
+    }
+
+    if(errorMessage != null) {
+        errorFollowUp(errorMessage);
+        return defaultValue;
+    }
+
+    return config[key];
+}
+
+const setItem = (path, value, obj) => {
     // reduce the path array, each iteration dig further into the object properties
     path.reduce((accumulator, key, i) => {
         // if you are at the final key set the value
@@ -34,17 +64,6 @@ const setConfigItem = (path, value, obj) => {
     return obj;
 };
 
-for (const supportedFileExtension of supportedFileExtensions) {
-    // Load rules
-    const ruleFilePath = "rules/" + supportedFileExtension + ".yaml";
-    console.log("Loading " + ruleFilePath);
-    fetch(ruleFilePath)
-        .then(response => response.text())
-        .then((data) => {
-            localStorage.setItem(supportedFileExtension, data);
-        }).catch(error => console.error(error));
-}
-
 async function sanitizeContent(file) {
     document.getElementById("display_panel").hidden = false;
     showSpinner();
@@ -52,10 +71,8 @@ async function sanitizeContent(file) {
     const fileNameParts = file.name.split('.');
     const fileExtension = fileNameParts.pop();
 
-    if (!supportedFileExtensions.includes(fileExtension)) {
-        const error = `Unsupported file extension: ${fileExtension}`;
-        console.error(error);
-        alert(error);
+    if (!getConfig("SupportedFileExtensions", {}).includes(fileExtension)) {
+        errorFollowUp(`UnsupportedFileExtension: ${fileExtension}`)
         hideSpinner();
         return;
     }
@@ -66,8 +83,7 @@ async function sanitizeContent(file) {
     try {
         original_content = JSON.parse(content);
     } catch (error) {
-        console.error(error);
-        alert(error);
+        errorFollowUp(error);
         hideSpinner();
         return;
     }
@@ -89,7 +105,7 @@ async function sanitizeContent(file) {
     const sanitizeActions = {};
     for (const path in rules) {
         const action = rules[path]["action"];
-        if (!supportedActions.includes(action)) {
+        if (!getConfig("SupportedActions", []).includes(action)) {
             console.warn(`Skipping rule "${rules[path]["description"]}
                           - Unsupported action "${action}.`);
             continue;
@@ -110,7 +126,7 @@ async function sanitizeContent(file) {
             const path = sanitizeActions[action][index];
             console.log(`${action} "${path}"`);
             if (action === 'remove') {
-                result = setConfigItem(path.slice(1).split('/'), "<REMOVED>", result);
+                result = setItem(path.slice(1).split('/'), "<REMOVED>", result);
             } else {
                 console.warn(`Unsupported ${action} on "${path}"`);
             }
@@ -121,7 +137,8 @@ async function sanitizeContent(file) {
         JSON.stringify(original_content, undefined, 2),
         JSON.stringify(result, undefined, 2));
     const targetElement = document.getElementById('sanitized_diff_div');
-    const diff2htmlUi = new Diff2HtmlUI(targetElement, diffString, diff2HtmlConfiguration);
+    const diff2htmlUi = new Diff2HtmlUI(targetElement, diffString,
+                                        getConfig("Diff2HtmlConfiguration", {}));
     diff2htmlUi.draw();
     diff2htmlUi.highlightCode();
     document.getElementById("download_button").disabled = false;
