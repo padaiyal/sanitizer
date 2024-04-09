@@ -21,9 +21,14 @@ function init() {
         }).catch(error => errorFollowUp(error));
 }
 
-function errorFollowUp(message) {
-    console.error(message);
+function errorFollowUp(message, terminate=false) {
+    console.error(message, terminate);
+    if(terminate){
+        console.log("Reloading page.");
+        location.reload();
+    }
     alert(message);
+
 }
 
 function getConfig(key, defaultValue=null) {
@@ -103,35 +108,52 @@ async function sanitizeContent(file) {
     result = JSON.parse(content);
     let matches = [];
     const sanitizeActions = {};
-    for (const path in rules) {
-        const action = rules[path]["action"];
-        if (!getConfig("SupportedActions", []).includes(action)) {
-            console.warn(`Skipping rule "${rules[path]["description"]}
+    const sanitizationTimeOutInMs = getConfig("SanitizationTimeOutInMs", 20_000);
+    const timeOutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+            errorFollowUp(`Sanitization timed out after ${sanitizationTimeOutInMs} ms`, true);
+            resolve();
+        }, sanitizationTimeOutInMs);
+    });
+
+    const sanitizationPromise = new Promise((resolve) => {
+        const start = Date.now();
+        console.log(`Set timeout`);
+        for (const path in rules) {
+            console.log(`Traversing ${path}`);
+            const action = rules[path]["action"];
+            if (!getConfig("SupportedActions", []).includes(action)) {
+                console.warn(`Skipping rule "${rules[path]["description"]}
                           - Unsupported action "${action}.`);
-            continue;
+                continue;
+            }
+            if (!(action in sanitizeActions)) {
+                sanitizeActions[action] = [];
+            }
+            matches = JSONPath.JSONPath({
+                path: path,
+                json: original_content,
+                resultType: 'pointer',
+            });
+            sanitizeActions[action] = sanitizeActions[action].concat(matches);
         }
-        if (!(action in sanitizeActions)) {
-            sanitizeActions[action] = [];
-        }
-        // TODO: Add timeout.
-        matches = JSONPath.JSONPath({
-            path: path,
-            json: original_content,
-            resultType: 'pointer',
-        });
-        sanitizeActions[action] = sanitizeActions[action].concat(matches);
-    }
-    for (const action in sanitizeActions) {
-        for (const index in sanitizeActions[action]) {
-            const path = sanitizeActions[action][index];
-            console.log(`${action} "${path}"`);
-            if (action === 'remove') {
-                result = setItem(path.slice(1).split('/'), "<REMOVED>", result);
-            } else {
-                console.warn(`Unsupported ${action} on "${path}"`);
+        console.log("Sanitization starts");
+        for (const action in sanitizeActions) {
+            for (const index in sanitizeActions[action]) {
+                const path = sanitizeActions[action][index];
+                console.log(`${action} on ${path}`);
+                if (action === 'remove') {
+                    result = setItem(path.slice(1).split('/'), "<REMOVED>", result);
+                } else {
+                    console.warn(`Unsupported ${action} on "${path}"`);
+                }
             }
         }
-    }
+        console.log(`Sanitization ends - ${Date.now() - start} ms`)
+        resolve();
+    });
+    Promise.race([timeOutPromise, sanitizationPromise]).then((value) => {
+        console.log(value)});
     let diffString = Diff.createTwoFilesPatch(
         fileName, sanitizedFileName,
         JSON.stringify(original_content, undefined, 2),
