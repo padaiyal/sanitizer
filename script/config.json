@@ -11,5 +11,5 @@
     "renderNothingWhenEmpty": false
   },
   "SupportedFileExtensions":  ["har"],
-  "SupportedActions": ["remove"]
+  "SupportedActions": ["contextual_replacement", "remove"]
 }

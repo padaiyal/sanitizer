@@ -1,6 +1,8 @@
 let config = {};
 let result = null;
 let sanitizedFileName = null;
+let contextDict = {};
+let contextReplacementValues = new Set([]);
 
 function init() {
     console.log('Initializing...')
@@ -45,6 +47,18 @@ function getConfig(key, defaultValue=null) {
     return config[key];
 }
 
+function randomString(length) {
+    let result = '';
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const charactersLength = characters.length;
+    let counter = 0;
+    while (counter < length) {
+        result += characters.charAt(Math.floor(Math.random() * charactersLength));
+        counter += 1;
+    }
+    return result;
+}
+
 const setItem = (path, value, obj) => {
     // reduce the path array, each iteration dig further into the object properties
     path.reduce((accumulator, key, i) => {
@@ -63,6 +77,22 @@ const setItem = (path, value, obj) => {
     // return the original object
     return obj;
 };
+
+function getContextualReplacement(value) {
+    if(value in contextReplacementValues) {
+        console.log(`Skipping contextual replacement for "${value}" as it has already been contextually sanitized.`);
+        return;
+    }
+    if(!(value in contextDict)) {
+        let replacement = randomString(10);
+        while(replacement in contextReplacementValues) {
+            replacement = randomString();
+        }
+        contextReplacementValues.add(replacement);
+        contextDict[value] = replacement;
+    }
+    return contextDict[value];
+}
 
 async function sanitizeContent(file) {
     document.getElementById("display_panel").hidden = false;
@@ -117,21 +147,34 @@ async function sanitizeContent(file) {
         matches = JSONPath.JSONPath({
             path: path,
             json: original_content,
-            resultType: 'pointer',
+            resultType: 'all',
         });
         sanitizeActions[action] = sanitizeActions[action].concat(matches);
     }
+
     for (const action in sanitizeActions) {
         for (const index in sanitizeActions[action]) {
-            const path = sanitizeActions[action][index];
+            const path = sanitizeActions[action][index].path;
+            const pointer = sanitizeActions[action][index].pointer;
             console.log(`${action} "${path}"`);
+            let replacement = '';
             if (action === 'remove') {
-                result = setItem(path.slice(1).split('/'), "<REMOVED>", result);
+                replacement = "<REMOVED>"
+            } else if (action === 'contextual_replacement') {
+                matches = JSONPath.JSONPath({
+                    path: path,
+                    json: original_content,
+                    resultType: 'value',
+                });
+                replacement = getContextualReplacement(matches);
             } else {
                 console.warn(`Unsupported ${action} on "${path}"`);
+                break;
             }
+            result = setItem(pointer.slice(1).split('/'), replacement, result);
         }
     }
+    console.log("Contextual replacement map:", contextDict);
     let diffString = Diff.createTwoFilesPatch(
         fileName, sanitizedFileName,
         JSON.stringify(original_content, undefined, 2),

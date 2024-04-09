@@ -6,7 +6,7 @@ rules:
         action: remove
     "$..headers..[?(@ && @.name == 'Cookie')][value]":
         description: Remove the Cookie header value.
-        action: remove
+        action: contextual_replacement
     "$..params..[?(@ && @.name == 'password')][value]":
         description: Remove the password param.
         action: remove
