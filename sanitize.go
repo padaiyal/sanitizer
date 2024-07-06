@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/PaesslerAG/jsonpath"
-	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff" // Library is deprecated, it needs to be replaced.
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
 	"github.com/tidwall/sjson"
