@@ -9,9 +9,20 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  GO_VERSION: '1.22.5'
+  CHROME_VERSION: '129'
+  FIREFOX_VERSION: '131.0.3'
+  CHROME_DRIVER_VERSION: '129.0.6668.100'
+  GECKO_DRIVER_VERSION: '0.35.0'
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idstrategyfail-fast
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
     permissions:
       # Give the default GITHUB_TOKEN write permission to commit and push the
       # added or changed files to the repository.
@@ -19,19 +30,59 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Testing git clone
+      shell: bash
+      run: ls
+
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.22.5'
+        go-version: ${{ env.GO_VERSION }}
 
     - name: Build
+      shell: bash
       run: ./build_wasm
 
-    - name: Test
-      run: ./run_tests
+    - name: Get WebDrivers
+      uses: actions/checkout@v4
+      with:
+        repository: 'padaiyal/depot'
+        path: ./depot/
+
+    - name: Set up Chrome Browser
+      id: setup-chrome
+      uses: browser-actions/setup-chrome@v1
+      with:
+        chrome-version: ${{ env.CHROME_VERSION }}
+
+    - name: Set up Firefox Browser
+      id: setup-firefox
+      uses: browser-actions/setup-firefox@v1
+      with:
+        firefox-version: ${{ env.FIREFOX_VERSION }}
+
+    - name: Set Browsers Env
+      shell: bash
+      run: |
+        CHROME_BROWSER_PATH="${{ steps.setup-chrome.outputs.chrome-path }}"
+        echo "CHROME_BROWSER_PATH=${CHROME_BROWSER_PATH}" >> $GITHUB_ENV
+        
+        FIREFOX_BROWSER_PATH="${{ steps.setup-firefox.outputs.firefox-path }}"
+        if [[ ${{ matrix.os }} == "windows-latest" ]]; then
+          FIREFOX_BROWSER_PATH="${FIREFOX_BROWSER_PATH}.exe"
+        fi
+        echo "FIREFOX_BROWSER_PATH=${FIREFOX_BROWSER_PATH}" >> $GITHUB_ENV
+    - name: Test - End to End Tests
+      shell: bash
+      run: |
+        echo $CHROME_BROWSER_PATH
+        echo $FIREFOX_BROWSER_PATH
+        ls depot/webdriver
+        pwd
+        ./run_tests
 
     - name: Commit and push WASM static pages
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' && matrix.os == 'ubuntu-latest'
       env:
         CI_COMMIT_MESSAGE: Add WASM static pages - $(date +'%Y-%m-%dT%H:%M:%S')
         CI_COMMIT_AUTHOR: padaiyal
