@@ -9,9 +9,18 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  GO_VERSION: '1.22.5'
+  CHROME_VERSION: 130
+  FIREFOX_VERSION: '131.0.3'
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idstrategyfail-fast
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
     permissions:
       # Give the default GITHUB_TOKEN write permission to commit and push the
       # added or changed files to the repository.
@@ -22,16 +31,28 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.22.5'
+        go-version: ${{ env.GO_VERSION }}
 
     - name: Build
+      shell: bash
       run: ./build_wasm
 
-    - name: Test
+    - name: Set up Chrome Browser
+      uses: browser-actions/setup-chrome@v1
+      with:
+        chrome-version: ${{ env.CHROME_VERSION }}
+
+    - name: Set up Firefox Browser
+      uses: browser-actions/setup-firefox@v1
+      with:
+        firefox-version: ${{ env.FIREFOX_VERSION }}
+
+    - name: Test - End to End Tests
+      shell: bash
       run: ./run_tests
 
     - name: Commit and push WASM static pages
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' && matrix.os == 'ubuntu-latest'
       env:
         CI_COMMIT_MESSAGE: Add WASM static pages - $(date +'%Y-%m-%dT%H:%M:%S')
         CI_COMMIT_AUTHOR: padaiyal

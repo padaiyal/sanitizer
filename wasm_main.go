@@ -219,6 +219,7 @@ func main() {
 		_, err := getResponse(getRuleFilePath(supportedFileExtension), &ruleSetStruct)
 
 		if err != nil {
+			println("Error loading rule set for " + supportedFileExtension + " files.")
 			errorFollowUp(err, false)
 		} else {
 			ruleSets[supportedFileExtension] = ruleSetStruct
@@ -234,6 +235,12 @@ func main() {
 	uploadButton.Call("setAttribute", "accept", allowedFileFormats)
 	// Set the callback to invoke when a file is selected.
 	uploadButton.Set("oninput", js.FuncOf(sanitizeCallbackFromJS))
+	/**
+	Shows that the button is ready for input.
+	Mainly used for testing to avoid race condition between loading the wasm file and uploading files.
+	Tests will fail if they try to upload files while the upload button callback is not set yet.
+	*/
+	uploadButton.Call("setAttribute", "ready", true)
 
 	// Keep the script running for callbacks to be processed.
 	select {}
