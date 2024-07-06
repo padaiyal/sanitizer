@@ -219,9 +219,11 @@ func main() {
 		_, err := getResponse(getRuleFilePath(supportedFileExtension), &ruleSetStruct)
 
 		if err != nil {
+			println("Found error loading rule set for " + supportedFileExtension + " files.")
 			errorFollowUp(err, false)
 		} else {
 			ruleSets[supportedFileExtension] = ruleSetStruct
+			println("ruleSet added:", ruleSetStruct.Format)
 			if allowedFileFormats != "" {
 				allowedFileFormats += ","
 			}
