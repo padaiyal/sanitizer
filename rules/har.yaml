@@ -1,12 +1,14 @@
-description: HTTP Archive (HAR) files are used to store info on requests made in a browser context and the correspondign responses. This might contain sensitive information such as tokens, cookies, IP addresses etc.
+description: HTTP Archive (HAR) files are used to store info on requests made in a browser context and the corresponding responses. This might contain sensitive information such as tokens, cookies, IP addresses etc.
 format: json
 rules:
-    "$..cookies.[?(@ && @.name == 'OTZ')][value]":
-        description: Remove the OTZ cookie value.
-        action: remove
-    "$..headers..[?(@ && @.name == 'Cookie')][value]":
-        description: Remove the Cookie header value.
-        action: contextual_replacement
-    "$..params..[?(@ && @.name == 'password')][value]":
-        description: Remove the password param.
-        action: remove
+  # Don't use recursive search (..) for getting matches in a recursive depth > 2.
+  # It breaks the conversion to the JSON key notation.
+  "$[\"log\"][\"entries\"]..[\"cookies\"][?(@[\"name\"] == \"OTZ\")][\"value\"]":
+    description: Remove the OTZ cookie value.
+    action: remove
+  "$[\"log\"][\"entries\"]..[\"headers\"][?(@[\"name\"] == \"Cookie\")][\"value\"]":
+    description: Remove the Cookie header value.
+    action: contextual_replacement
+  "$[\"log\"][\"entries\"]..[\"params\"][?(@[\"name\"] == \"password\")][\"value\"]":
+    description: Remove the password param.
+    action: remove
