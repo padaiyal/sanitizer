@@ -129,6 +129,8 @@ func main() {
 		errorFollowUp(err, true)
 	}
 
+	println("SupportedFileExtensions = ", config.SupportedFileExtensions)
+
 	// Load rule sets.
 	allowedFileFormats := ""
 	for _, supportedFileExtension := range config.SupportedFileExtensions {
