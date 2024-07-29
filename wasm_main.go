@@ -44,6 +44,7 @@ func getResponse[T interface{}](url string, responseStruct *T) ([]byte, error) {
 	Make an HTTP GET request to the specified URL and marshal the response body into
 	the provided struct object.
 	*/
+	println("url = ", url)
 	response, err := http.Get(url)
 	if response == nil || response.StatusCode != 200 || err != nil {
 		return nil, err
