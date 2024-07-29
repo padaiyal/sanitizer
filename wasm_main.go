@@ -57,13 +57,13 @@ func getResponse[T interface{}](url string, responseStruct *T) ([]byte, error) {
 	if err == nil && responseStruct != nil {
 		contentType := response.Header.Get("Content-Type")
 		fmt.Println("Content-Type = ", contentType)
-		if contentType == "application/json" {
+		fmt.Println("Body = ", string(bodyBytes))
+		if strings.Contains(contentType, "application/json") {
 			err = json.Unmarshal(bodyBytes, responseStruct)
-		} else if contentType == "application/yaml" || contentType == "text/yaml" {
+		} else if strings.Contains(contentType, "application/yaml") || strings.Contains(contentType, "text/yaml") {
 			err = yaml.Unmarshal(bodyBytes, responseStruct)
 		}
 	}
-	fmt.Println("Body = ", string(bodyBytes))
 	return bodyBytes, err
 }
 
