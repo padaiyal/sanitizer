@@ -129,7 +129,7 @@ func main() {
 		errorFollowUp(err, true)
 	}
 
-	println("SupportedFileExtensions = ", config.SupportedFileExtensions)
+	println("SupportedFileExtensions = ", strings.Join(config.SupportedFileExtensions, ","))
 
 	// Load rule sets.
 	allowedFileFormats := ""
