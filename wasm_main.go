@@ -62,6 +62,7 @@ func getResponse[T interface{}](url string, responseStruct *T) ([]byte, error) {
 			err = yaml.Unmarshal(bodyBytes, responseStruct)
 		}
 	}
+	fmt.Println("Body = ", string(bodyBytes))
 	return bodyBytes, err
 }
 
