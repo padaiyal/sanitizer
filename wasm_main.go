@@ -53,8 +53,8 @@ func getResponse[T interface{}](url string, responseStruct *T) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	response.Body.Close()
-	if responseStruct != nil {
+	err = response.Body.Close()
+	if err == nil && responseStruct != nil {
 		contentType := response.Header.Get("Content-Type")
 		fmt.Println("Content-Type = ", contentType)
 		if contentType == "application/json" {
