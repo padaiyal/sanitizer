@@ -15,6 +15,8 @@ import (
 )
 
 type Config struct {
+	ReplacementString       string   `json:"ReplacementString"`
+	SecretPrefix            string   `json:"SecretPrefix"`
 	SupportedFileExtensions []string `json:"SupportedFileExtensions"`
 	SupportedActions        []string `json:"SupportedActions"`
 }
@@ -87,7 +89,11 @@ func sanitizeCallback(_ js.Value, _ []js.Value) any {
 	Callback when an input file is selected to be sanitized.
 	*/
 	uploadButton := document.Call("getElementById", "upload_button")
-	file := uploadButton.Get("files").Call("item", 0)
+	files := uploadButton.Get("files")
+	if files.Get("length").Int() <= 0 {
+		return nil
+	}
+	file := files.Call("item", 0)
 	file.Call("arrayBuffer").Call("then", js.FuncOf(func(v js.Value, x []js.Value) any {
 		data := js.Global().Get("Uint8Array").New(x[0])
 		dst := make([]byte, data.Get("length").Int())
