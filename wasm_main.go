@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall/js"
+	"time"
 )
 
 type RuleDetectionTaskInput struct {
@@ -125,40 +126,46 @@ func sanitizeCallback(_ js.Value, _ []js.Value) any {
 	*/
 	uploadButton := document.Call("getElementById", "upload_button")
 	files := uploadButton.Get("files")
-	if files.Get("length").Int() <= 0 {
+	filesCount := files.Get("length").Int()
+	if filesCount <= 0 {
 		return nil
-	}
-	file := files.Call("item", 0)
-	file.Call("arrayBuffer").Call("then", js.FuncOf(func(v js.Value, x []js.Value) any {
-		data := js.Global().Get("Uint8Array").New(x[0])
-		dst := make([]byte, data.Get("length").Int())
-		js.CopyBytesToGo(dst, data)
-		unsanitizedContentBytes, err := toPrettyJson(dst)
-		if err != nil {
-			errorFollowUp(err, true)
-		}
-		unsanitizedContent := string(unsanitizedContentBytes)
-		filePath := file.Get("name").String()
-		println("File has been chosen: ", filePath)
+	} else {
+		js.Global().Call("clearOutputs")
+		for index := 0; index < filesCount; index++ {
+			file := files.Call("item", index)
+			file.Call("arrayBuffer").Call("then", js.FuncOf(func(v js.Value, x []js.Value) any {
+				data := js.Global().Get("Uint8Array").New(x[0])
+				dst := make([]byte, data.Get("length").Int())
+				js.CopyBytesToGo(dst, data)
+				unsanitizedContentBytes, err := toPrettyJson(dst)
+				if err != nil {
+					errorFollowUp(err, true)
+				}
+				unsanitizedContent := string(unsanitizedContentBytes)
+				filePath := file.Get("name").String()
+				println("File has been chosen: ", filePath)
 
-		fileExtension := filepath.Ext(filePath)[1:]
-		println("Rule sets available: ", len(ruleSets))
-		outputFileName := generateSanitizedFileName(filePath)
-		sanitizedContent, diffPatchText, err := Sanitize(unsanitizedContent, fileExtension, filePath, outputFileName, ruleSets, config)
-		if err != nil {
-			errorFollowUp(err, false)
+				fileExtension := filepath.Ext(filePath)[1:]
+				println("Rule sets available: ", len(ruleSets))
+				sanitizedFileName := generateSanitizedFileName(filePath)
+				sanitizedContent, diffPatchText, err := Sanitize(unsanitizedContent, fileExtension, filePath, sanitizedFileName, ruleSets, config)
+				if err != nil {
+					errorFollowUp(err, false)
+				}
+				println("Showing output. filePath=", filePath, ", index=", index, ", time=", time.Now().Unix())
+				js.Global().Call(
+					"addOutput",
+					filePath,
+					unsanitizedContent,
+					sanitizedFileName,
+					sanitizedContent,
+					diffPatchText,
+					getRuleFilePath(fileExtension),
+				)
+				return nil
+			}))
 		}
-		js.Global().Call(
-			"showOutput",
-			filePath,
-			unsanitizedContent,
-			outputFileName,
-			sanitizedContent,
-			diffPatchText,
-			getRuleFilePath(fileExtension),
-		)
-		return nil
-	}))
+	}
 
 	return nil
 }

@@ -33,24 +33,23 @@
     <body onload="init()">
         <h1 id="title">Sensitive Info Sanitizer</h1>
         <div id="uploader">
-            <input type="file" id="upload_button" name="upload_button" class="form-control"/>
+            <input type="file" id="upload_button" name="upload_button" class="form-control" multiple="multiple"/>
         </div>
 
         <div id="display_panel" hidden>
             <div id="display_card" class="card">
                 <div id="buttons">
                     <input type="button" id="view_rules_button" class="btn btn-secondary" name="view_rules_button"
-                           value="View Rules File" disabled>
+                           value="View Rules File/s" disabled>
                     <input type="button" id="download_button" class="btn btn-success" name="download_button"
-                           value="Download Sanitized File" disabled>
+                           value="Download Sanitized File/s" disabled>
                 </div>
-                <div class="card-body">
+                <div id="output" class="card-body">
                     <div id="overlay-spinner">
                         <div class="w-100 d-flex justify-content-center align-items-center" id="spinner_container">
                             <div class="spinner-border text-success" id="spinner"></div>
                         </div>
                     </div>
-                    <div id="sanitized_diff_div"></div>
                 </div>
                 <div class="card-footer text-body-secondary" id="downloader"></div>
             </div>

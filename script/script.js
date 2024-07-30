@@ -1,4 +1,7 @@
 let config = {};
+let diffDivElementsCount = 0;
+let ruleFiles = new Set()
+let sanitizedFileContents = {}
 
 function init() {
     console.log('Initializing...')
@@ -32,20 +35,42 @@ function getConfig(key, defaultValue=null) {
     return config[key];
 }
 
-function showOutput(unsanitized_file_name, unsanitized_content, sanitized_file_name, sanitized_content, diffPatchText, ruleFilePath) {
+function clearOutputs() {
+    // Remove all diff div elements.
+    let oldSanitizedDiffDivs = document.getElementsByClassName('sanitized_diff_div')
+    const outputDiffDivElementsCount = oldSanitizedDiffDivs.length;
+    for (let i = 0; i < outputDiffDivElementsCount; i++) {
+        oldSanitizedDiffDivs.item(0).remove();
+    }
+    diffDivElementsCount = 0;
+
+    ruleFiles = new Set()
+    sanitizedFileContents = {}
+    const viewRulesButton = document.getElementById("view_rules_button");
+    viewRulesButton.disabled = false;
+    viewRulesButton.onclick = function() {openRuleFiles();}
+    const downloadButton = document.getElementById("download_button")
+    downloadButton.disabled = false;
+    downloadButton.onclick = function() {downloadSanitizedContent();}
     document.getElementById("display_panel").hidden = false;
-    const targetElement = document.getElementById('sanitized_diff_div');
+}
+
+function addOutput(unsanitized_file_name, unsanitized_content, sanitized_file_name, sanitized_content, diffPatchText, ruleFilePath) {
+    document.getElementById("display_panel").hidden = false;
+
+    const targetElement = document.createElement('div');
+    targetElement.setAttribute('class', 'sanitized_diff_div');
+    targetElement.setAttribute('id', 'sanitized_diff_div' + (diffDivElementsCount + 1));
+    document.getElementById("output").appendChild(targetElement);
+    diffDivElementsCount++;
+
+    ruleFiles.add(ruleFilePath)
+    sanitizedFileContents[sanitized_file_name] = sanitized_content
+
     const diff2htmlUi = new Diff2HtmlUI(targetElement, diffPatchText,
         getConfig("Diff2HtmlConfiguration", {}));
     diff2htmlUi.draw();
     diff2htmlUi.highlightCode();
-    const viewRulesButton = document.getElementById("view_rules_button");
-    viewRulesButton.disabled = false;
-    viewRulesButton.onclick = function() {window.open(ruleFilePath, '_blank').focus();};
-    const downloadButton = document.getElementById("download_button")
-    downloadButton.disabled = false;
-    downloadButton.onclick = function() {downloadContent(sanitized_file_name, sanitized_content);}
-    document.getElementById("display_panel").hidden = false;
     hideSpinner();
 }
 
@@ -55,6 +80,20 @@ function hideSpinner() {
 
 function showSpinner() {
     document.getElementById("overlay-spinner").style.display="flex";
+}
+
+function openRuleFiles() {
+    console.log(ruleFiles);
+    for (const ruleFilePath of ruleFiles) {
+        console.log(ruleFilePath);
+        window.open(ruleFilePath, '_blank').focus();
+    }
+}
+
+function downloadSanitizedContent() {
+    for (const filePath in sanitizedFileContents) {
+        downloadContent(filePath, sanitizedFileContents[filePath])
+    }
 }
 
 function downloadContent(filename, text) {
