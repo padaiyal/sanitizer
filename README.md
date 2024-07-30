@@ -9,7 +9,8 @@ The following browsers are supported:
  - Google Chrome
  - Firefox
 
-At the moment, it sanitizes HAR files.
+At the moment, it sanitizes HAR files.<br>
+Multiple files can be sanitized at the same time.<br>
 Support for sanitizing SAML requests/responses are in progress.
 
 ## Build
