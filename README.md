@@ -10,7 +10,7 @@ At the moment, it sanitizes HAR files.
 Support for sanitizing SAML requests/responses are in progress.
 
 ## Build
-To build the WASM script, run the `build_was` script.
+To build the WASM code, run `build_wasm`.
 ```
 ./build_wasm
 ```
