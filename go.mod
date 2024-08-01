@@ -3,7 +3,7 @@ module github.com/padaiyal/sanitizer
 go 1.22.5
 
 require (
-	github.com/PaesslerAG/jsonpath v0.1.2-0.20240726212847-3a740cf7976f
+	github.com/PaesslerAG/jsonpath v0.1.2-0.20240529151134-87f681734c9c
 	github.com/tidwall/sjson v1.2.5
 	gopkg.in/yaml.v3 v3.0.1
 )
