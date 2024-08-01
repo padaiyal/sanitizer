@@ -104,12 +104,12 @@ func sanitizeCallback(_ js.Value, _ []js.Value) any {
 		}
 		unsanitizedContent := string(unsanitizedContentBytes)
 		filePath := file.Get("name").String()
-		//fileContent := js.Global().Call("readFileContent")
 		println("File has been chosen: ", filePath)
 
 		fileExtension := filepath.Ext(filePath)[1:]
 		println("Rule sets available: ", len(ruleSets))
-		sanitizedContent, err := Sanitize(unsanitizedContent, fileExtension, ruleSets, config)
+		outputFileName := generateSanitizedFileName(filePath)
+		sanitizedContent, diffPatchText, err := Sanitize(unsanitizedContent, fileExtension, filePath, outputFileName, ruleSets, config)
 		if err != nil {
 			errorFollowUp(err, false)
 		}
@@ -117,8 +117,9 @@ func sanitizeCallback(_ js.Value, _ []js.Value) any {
 			"showOutput",
 			filePath,
 			unsanitizedContent,
-			generateSanitizedFileName(filePath),
+			outputFileName,
 			sanitizedContent,
+			diffPatchText,
 			getRuleFilePath(fileExtension),
 		)
 		return nil

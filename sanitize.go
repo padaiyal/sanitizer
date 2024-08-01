@@ -3,7 +3,11 @@ package main
 //goland:noinspection GoUnsortedImport
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/PaesslerAG/jsonpath"
+	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff/myers"
+	"github.com/hexops/gotextdiff/span"
 	"github.com/tidwall/sjson"
 	"go/types"
 	"regexp"
@@ -21,6 +25,12 @@ func convertJsonPathToKey(jsonPath string) string {
 	jsonKey = strings.ReplaceAll(jsonKey, "]", "")
 	jsonKey = strings.ReplaceAll(jsonKey, "\"", "")
 	return jsonKey
+}
+
+func getDiff(originalContent string, originalFileName string, modifiedContent string, modifiedFileName string) string {
+	edits := myers.ComputeEdits(span.URIFromPath(originalFileName), originalContent, modifiedContent)
+	diff := fmt.Sprint(gotextdiff.ToUnified(originalFileName, modifiedFileName, originalContent, edits))
+	return diff
 }
 
 func getSecretReplacement(secret string, secretPatterns []string, prefix string) (string, error) {
@@ -54,7 +64,7 @@ func getSecretReplacement(secret string, secretPatterns []string, prefix string)
 	return secretReplacementsMap[secret], nil
 }
 
-func Sanitize(content string, fileExtension string, ruleSets map[string]RuleSet, config Config) (string, error) {
+func Sanitize(content string, fileExtension string, inputFileName string, outputFileName string, ruleSets map[string]RuleSet, config Config) (string, string, error) {
 	if !slices.Contains(config.SupportedFileExtensions, fileExtension) {
 		err := types.Error{Msg: "Unsupported file extension (" + fileExtension + "), Supported file extensions are " + strings.Join(config.SupportedFileExtensions, ",") + ""}
 		errorFollowUp(err, true)
@@ -67,7 +77,7 @@ func Sanitize(content string, fileExtension string, ruleSets map[string]RuleSet,
 			err,
 			false,
 		)
-		return "", err
+		return "", "", err
 	}
 	println("Format = ", ruleSet.Format)
 	println("Description = ", ruleSet.Description)
@@ -91,7 +101,7 @@ func Sanitize(content string, fileExtension string, ruleSets map[string]RuleSet,
 				err,
 				false,
 			)
-			return "", err
+			return "", "", err
 		}
 		valuesMap := values.(map[string]interface{})
 		if len(valuesMap) > 0 {
@@ -126,5 +136,7 @@ func Sanitize(content string, fileExtension string, ruleSets map[string]RuleSet,
 	if err != nil {
 		errorFollowUp(err, true)
 	}
-	return string(sanitizedContentBytes), nil
+	sanitizedContent = string(sanitizedContentBytes)
+	diffPatchText := getDiff(content, inputFileName, sanitizedContent, outputFileName)
+	return sanitizedContent, diffPatchText, nil
 }
