@@ -32,15 +32,10 @@ function getConfig(key, defaultValue=null) {
     return config[key];
 }
 
-function showOutput(unsanitized_file_name, unsanitized_content, sanitized_file_name, sanitized_content, ruleFilePath) {
+function showOutput(unsanitized_file_name, unsanitized_content, sanitized_file_name, sanitized_content, diffPatchText, ruleFilePath) {
     document.getElementById("display_panel").hidden = false;
-    let diffString = Diff.createTwoFilesPatch(
-        unsanitized_file_name,
-        sanitized_file_name,
-        unsanitized_content,
-        sanitized_content);
     const targetElement = document.getElementById('sanitized_diff_div');
-    const diff2htmlUi = new Diff2HtmlUI(targetElement, diffString,
+    const diff2htmlUi = new Diff2HtmlUI(targetElement, diffPatchText,
         getConfig("Diff2HtmlConfiguration", {}));
     diff2htmlUi.draw();
     diff2htmlUi.highlightCode();
