@@ -10,7 +10,7 @@
     "highlight": true,
     "renderNothingWhenEmpty": false
   },
-  "ReplacementString": "<REMOVED>",
+  "RemovedSecretReplacement": "<REMOVED>",
   "SecretPrefix": "secret",
   "SupportedFileExtensions":  ["har"],
   "SupportedActions": ["contextual_replacement", "remove"]
