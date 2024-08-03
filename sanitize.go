@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var secretReplacementsMap = map[string]string{}
@@ -64,6 +65,69 @@ func getSecretReplacement(secret string, secretPatterns []string, prefix string)
 	return secretReplacementsMap[secret], nil
 }
 
+func runRuleDetectionTask(ruleDetectionTaskInput RuleDetectionTaskInput, channel *chan map[string]string, waitGroup *sync.WaitGroup) {
+	ruleJsonPath := ruleDetectionTaskInput.RuleJsonPath
+	ruleInfo := ruleDetectionTaskInput.RuleInfo
+	println("ruleJsonPath = ", ruleJsonPath)
+	println("Description = ", ruleInfo.Description)
+	println("Action = ", ruleInfo.Action)
+
+	removedSecretReplacement := config.RemovedSecretReplacement
+	secretPrefix := config.SecretPrefix
+
+	replacementMap := map[string]string{}
+	contentJson := interface{}(nil)
+	json.Unmarshal([]byte(*ruleDetectionTaskInput.Content), &contentJson)
+	values, err := jsonpath.GetWithPaths(ruleJsonPath, contentJson)
+	if !slices.Contains(config.SupportedActions, ruleInfo.Action) {
+		err = types.Error{Msg: "Unsupported action (" + ruleInfo.Action + ") in rule " + ruleJsonPath}
+	}
+	if err != nil {
+		println("\tError running rule", ruleJsonPath)
+		errorFollowUp(
+			err,
+			false,
+		)
+		*channel <- replacementMap
+		waitGroup.Done()
+		return
+	}
+	valuesMap := values.(map[string]interface{})
+	println("Rule hits:")
+	if len(valuesMap) <= 0 {
+		println("\tNone")
+	} else {
+		for jsonPath, value := range valuesMap {
+			valueStr := value.(string)
+			println("\tjsonPath=", jsonPath, "value=", valueStr)
+			replacementValue := ""
+			if ruleInfo.Action == "contextual_replacement" {
+				secretPatterns := []string{secretPrefix + "\\d+", removedSecretReplacement}
+				replacementValue, err = getSecretReplacement(valueStr, secretPatterns, secretPrefix)
+				if err != nil {
+					errorFollowUp(err, false)
+				}
+			} else if ruleInfo.Action == "remove" {
+				replacementValue = removedSecretReplacement
+			} else {
+				err = types.Error{Msg: "Unsupported action (" + ruleInfo.Action + ") for rule (" + ruleJsonPath + ")"}
+				errorFollowUp(err, false)
+			}
+			if replacementValue != "" {
+				if replacementValue == valueStr {
+					println("\t\tSkipping replacement as it has already been sanitized. jsonPath=", jsonPath, ", value=", valueStr)
+					continue
+				} else {
+					replacementMap[jsonPath] = replacementValue
+				}
+			}
+		}
+	}
+
+	*channel <- replacementMap
+	waitGroup.Done()
+}
+
 func Sanitize(content string, fileExtension string, inputFileName string, outputFileName string, ruleSets map[string]RuleSet, config Config) (string, string, error) {
 	if !slices.Contains(config.SupportedFileExtensions, fileExtension) {
 		err := types.Error{Msg: "Unsupported file extension (" + fileExtension + "), Supported file extensions are " + strings.Join(config.SupportedFileExtensions, ",") + ""}
@@ -82,53 +146,29 @@ func Sanitize(content string, fileExtension string, inputFileName string, output
 	println("Format = ", ruleSet.Format)
 	println("Description = ", ruleSet.Description)
 	println("Rules = ", ruleSet.Rules)
-	replacementString := config.ReplacementString
-	secretPrefix := config.SecretPrefix
+	println("RulesCount = ", len(ruleSet.Rules))
+	ruleDetectionTaskInputs := make([]RuleDetectionTaskInput, 0)
 	for ruleJsonPath, ruleInfo := range ruleSet.Rules {
-		println("ruleJsonPath = ", ruleJsonPath)
-		println("Description = ", ruleInfo.Description)
-		println("Action = ", ruleInfo.Action)
+		println("Adding ", ruleJsonPath, ruleInfo.Description)
+		ruleDetectionTaskInput := RuleDetectionTaskInput{
+			Content:      &content,
+			RuleJsonPath: ruleJsonPath,
+			RuleInfo:     ruleInfo,
+			Config:       &config,
+		}
+		ruleDetectionTaskInputs = append(ruleDetectionTaskInputs, ruleDetectionTaskInput)
+	}
+	ruleDetectionTaskOutputs := runTasks(runRuleDetectionTask, &ruleDetectionTaskInputs)
 
-		v := interface{}(nil)
-		json.Unmarshal([]byte(content), &v)
-		values, err := jsonpath.GetWithPaths(ruleJsonPath, v)
-		if !slices.Contains(config.SupportedActions, ruleInfo.Action) {
-			err = types.Error{Msg: "Unsupported action (" + ruleInfo.Action + ") in rule " + ruleJsonPath}
-		}
-		if err != nil {
-			println("Error running rule", ruleJsonPath)
-			errorFollowUp(
-				err,
-				false,
-			)
-			return "", "", err
-		}
-		valuesMap := values.(map[string]interface{})
-		if len(valuesMap) > 0 {
-			println("Rule hits:")
-			for jsonPath, value := range valuesMap {
-				jsonKey := convertJsonPathToKey(jsonPath)
-				valueStr := value.(string)
-				println("\tjsonPath=", jsonPath, "jsonKey=", jsonKey, "value=", valueStr)
-				replacementValue := ""
-				if ruleInfo.Action == "contextual_replacement" {
-					replacementValue, err = getSecretReplacement(valueStr, []string{replacementString, secretPrefix}, secretPrefix)
-					if err != nil {
-						errorFollowUp(err, false)
-					}
-				} else if ruleInfo.Action == "remove" {
-					replacementValue = replacementString
-				} else {
-					err = types.Error{Msg: "Unsupported action (" + ruleInfo.Action + ") for rule (" + ruleJsonPath + ")"}
-					errorFollowUp(err, false)
-				}
-				if replacementValue != "" {
-					println("\t\tReplacement value is", replacementValue)
-					sanitizedContent, err = sjson.Set(sanitizedContent, jsonKey, replacementValue)
-					if err != nil {
-						errorFollowUp(err, false)
-					}
-				}
+	println("Sanitization starting")
+	for _, replacementMap := range *ruleDetectionTaskOutputs {
+		for jsonPath, replacementValue := range replacementMap {
+			jsonKey := convertJsonPathToKey(jsonPath)
+			println("\tjsonPath=", jsonPath, ", jsonKey=", jsonKey, ", replacement=", replacementValue)
+			var err error = nil
+			sanitizedContent, err = sjson.Set(sanitizedContent, jsonKey, replacementValue)
+			if err != nil {
+				errorFollowUp(err, false)
 			}
 		}
 	}

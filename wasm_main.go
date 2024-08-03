@@ -11,23 +11,58 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall/js"
 )
 
+type RuleDetectionTaskInput struct {
+	Content      *string
+	RuleJsonPath string
+	RuleInfo     RuleInfo
+	Config       *Config
+}
+
+// Generic method to run tasks in parallel.
+func runTasks[I any, O any](task func(I, *chan O, *sync.WaitGroup), taskInputs *[]I) *[]O {
+	tasksCount := len(*taskInputs)
+	waitGroup := sync.WaitGroup{}
+	taskOutputs := make([]O, tasksCount)
+	channel := make(chan O, tasksCount)
+	for _, taskInput := range *taskInputs {
+		// We add 1 to the wait group. Each worker will decrease it by 1 once it's done.
+		waitGroup.Add(1)
+
+		// Spawn a goroutine
+		go task(taskInput, &channel, &waitGroup)
+	}
+	// Now we wait for all tasks to finish.
+	waitGroup.Wait()
+
+	// Close the channel or the following loop will get stuck.
+	close(channel)
+
+	for taskOutput := range channel {
+		taskOutputs = append(taskOutputs, taskOutput)
+	}
+	return &taskOutputs
+}
+
 type Config struct {
-	ReplacementString       string   `json:"ReplacementString"`
-	SecretPrefix            string   `json:"SecretPrefix"`
-	SupportedFileExtensions []string `json:"SupportedFileExtensions"`
-	SupportedActions        []string `json:"SupportedActions"`
+	RemovedSecretReplacement string   `json:"RemovedSecretReplacement"`
+	SecretPrefix             string   `json:"SecretPrefix"`
+	SupportedFileExtensions  []string `json:"SupportedFileExtensions"`
+	SupportedActions         []string `json:"SupportedActions"`
+}
+
+type RuleInfo struct {
+	Description string `yaml:"description"`
+	Action      string `yaml:"action"`
 }
 
 type RuleSet struct {
-	Description string `yaml:"description"`
-	Format      string `yaml:"format"`
-	Rules       map[string]struct {
-		Description string `yaml:"description"`
-		Action      string `yaml:"action"`
-	} `yaml:"rules"`
+	Description string              `yaml:"description"`
+	Format      string              `yaml:"format"`
+	Rules       map[string]RuleInfo `yaml:"rules"`
 }
 
 var config = Config{}
