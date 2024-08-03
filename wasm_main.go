@@ -120,51 +120,57 @@ func generateSanitizedFileName(filePath string) string {
 	return filePath[:splitIndex] + "_sanitized." + filePath[splitIndex+1:]
 }
 
-func sanitizeCallback(_ js.Value, _ []js.Value) any {
+func sanitizeFileTask(file js.Value, errorsChannel *chan error, waitGroup *sync.WaitGroup) {
+	var err error = nil
+	file.Call("arrayBuffer").Call("then", js.FuncOf(func(v js.Value, x []js.Value) any {
+		data := js.Global().Get("Uint8Array").New(x[0])
+		dst := make([]byte, data.Get("length").Int())
+		js.CopyBytesToGo(dst, data)
+		unsanitizedContentBytes, err := toPrettyJson(dst)
+		if err != nil {
+			errorFollowUp(err, true)
+		}
+		unsanitizedContent := string(unsanitizedContentBytes)
+		filePath := file.Get("name").String()
+		fileExtension := filepath.Ext(filePath)[1:]
+		println("Rule sets available: ", len(ruleSets))
+		sanitizedFileName := generateSanitizedFileName(filePath)
+		sanitizedContent, diffPatchText, err := Sanitize(unsanitizedContent, fileExtension, filePath, sanitizedFileName, ruleSets, config)
+		if err != nil {
+			errorFollowUp(err, false)
+		}
+		println("Showing output. filePath=", filePath, ", time=", time.Now().Unix())
+		js.Global().Call(
+			"addOutput",
+			filePath,
+			unsanitizedContent,
+			sanitizedFileName,
+			sanitizedContent,
+			diffPatchText,
+			getRuleFilePath(fileExtension),
+		)
+		return nil
+	}))
+	*errorsChannel <- err
+	waitGroup.Done()
+}
+
+func sanitizeCallbackFromJS(_ js.Value, _ []js.Value) any {
 	/**
 	Callback when an input file is selected to be sanitized.
 	*/
 	uploadButton := document.Call("getElementById", "upload_button")
-	files := uploadButton.Get("files")
-	filesCount := files.Get("length").Int()
+	filesElement := uploadButton.Get("files")
+	filesCount := filesElement.Get("length").Int()
 	if filesCount <= 0 {
 		return nil
 	} else {
 		js.Global().Call("clearOutputs")
+		files := make([]js.Value, filesCount)
 		for index := 0; index < filesCount; index++ {
-			file := files.Call("item", index)
-			file.Call("arrayBuffer").Call("then", js.FuncOf(func(v js.Value, x []js.Value) any {
-				data := js.Global().Get("Uint8Array").New(x[0])
-				dst := make([]byte, data.Get("length").Int())
-				js.CopyBytesToGo(dst, data)
-				unsanitizedContentBytes, err := toPrettyJson(dst)
-				if err != nil {
-					errorFollowUp(err, true)
-				}
-				unsanitizedContent := string(unsanitizedContentBytes)
-				filePath := file.Get("name").String()
-				println("File has been chosen: ", filePath)
-
-				fileExtension := filepath.Ext(filePath)[1:]
-				println("Rule sets available: ", len(ruleSets))
-				sanitizedFileName := generateSanitizedFileName(filePath)
-				sanitizedContent, diffPatchText, err := Sanitize(unsanitizedContent, fileExtension, filePath, sanitizedFileName, ruleSets, config)
-				if err != nil {
-					errorFollowUp(err, false)
-				}
-				println("Showing output. filePath=", filePath, ", index=", index, ", time=", time.Now().Unix())
-				js.Global().Call(
-					"addOutput",
-					filePath,
-					unsanitizedContent,
-					sanitizedFileName,
-					sanitizedContent,
-					diffPatchText,
-					getRuleFilePath(fileExtension),
-				)
-				return nil
-			}))
+			files[index] = filesElement.Call("item", index)
 		}
+		_ = runTasks(sanitizeFileTask, &files)
 	}
 
 	return nil
@@ -202,7 +208,7 @@ func main() {
 	// Restricts the file types that can be loaded based on rule set availability.
 	uploadButton.Call("setAttribute", "accept", allowedFileFormats)
 	// Set the callback to invoke when a file is selected.
-	uploadButton.Set("oninput", js.FuncOf(sanitizeCallback))
+	uploadButton.Set("oninput", js.FuncOf(sanitizeCallbackFromJS))
 
 	// Keep the script running for callbacks to be processed.
 	select {}
