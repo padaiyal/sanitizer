@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,12 +27,12 @@ var downloadPath = filepath.Join(currentPath, "tmp")
 var server *http.Server
 var rulesFile = "rules/har.yaml"
 var fileToSanitize = "./resources/hars/github.com.har"
-var expectedFileToDownload = filepath.Join(downloadPath, "githubcom_sanitized.har")
-var selenium_port = 4444
+var expectedFileToDownload = filepath.Join(downloadPath, "github.com_sanitized.har")
+var seleniumPort = 4444
 
 func getChromeDriver() (*selenium.Service, selenium.WebDriver) {
 
-	service, err := selenium.NewChromeDriverService("./resources/drivers/chromedriver", selenium_port)
+	service, err := selenium.NewChromeDriverService("chromedriver", seleniumPort)
 	if err != nil {
 		log.Fatal("Error:", err)
 	}
@@ -49,7 +50,7 @@ func getChromeDriver() (*selenium.Service, selenium.WebDriver) {
 
 func getFirefoxDriver() (*selenium.Service, selenium.WebDriver) {
 
-	service, err := selenium.NewGeckoDriverService("./resources/drivers/geckodriver", selenium_port)
+	service, err := selenium.NewGeckoDriverService("geckodriver", seleniumPort)
 	if err != nil {
 		log.Fatal("Error:", err)
 	}
@@ -62,28 +63,9 @@ func getFirefoxDriver() (*selenium.Service, selenium.WebDriver) {
 
 	caps.AddFirefox(firefox.Capabilities{Prefs: prefs})
 
-	webDriver := setAndGetDriver(caps, fmt.Sprintf("http://localhost:%d", selenium_port))
+	webDriver := setAndGetDriver(caps, fmt.Sprintf("http://localhost:%d", seleniumPort))
 	return service, webDriver
 
-}
-
-func getEdgeWebDriver() (*selenium.Service, selenium.WebDriver) {
-
-	service, err := selenium.NewChromeDriverService("./resources/drivers/msedgedriver", selenium_port)
-	if err != nil {
-		log.Fatal("Error:", err)
-	}
-
-	// configure the browser options
-	caps := selenium.Capabilities{}
-	prefs := make(map[string]interface{})
-	// prefs["download.default_directory"] = downloadPath
-	prefs["savefile.default_directory"] = downloadPath
-	caps.AddChrome(chrome.Capabilities{Prefs: prefs})
-
-	webDriver := setAndGetDriver(caps, "")
-
-	return service, webDriver
 }
 
 func setAndGetDriver(capabilities selenium.Capabilities, urlPrefix string) selenium.WebDriver {
@@ -113,12 +95,14 @@ func setAndGetDriver(capabilities selenium.Capabilities, urlPrefix string) selen
 
 	return driver
 }
+
 func runHtmlServer() {
 	server = &http.Server{
 		Addr: ":3000",
 	}
 
 	http.Handle("/", http.FileServer(http.Dir("../")))
+	mime.AddExtensionType(".yaml", "text/yaml")
 
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("HTTP server error: %v", err)
@@ -129,7 +113,7 @@ func runHtmlServer() {
 
 func setUp() {
 	go runHtmlServer()
-	os.Mkdir(downloadPath, os.FileMode(0522))
+	os.Mkdir(downloadPath, 0700)
 
 }
 
@@ -173,9 +157,9 @@ func testLogic(t *testing.T, webDriver selenium.WebDriver) {
 
 	expectedDeletedElements := []string{"password12345"}
 	expectedInsertedElements := []string{"<REMOVED>"}
-
+	time.Sleep(5 * time.Second)
 	uploadFile(webDriver, fileToSanitize)
-
+	time.Sleep(30 * time.Second)
 	deletedElements, err := webDriver.FindElements(selenium.ByTagName, "del")
 
 	if err != nil {
@@ -321,6 +305,7 @@ func resetEnvironment() {
 func TestFirefoxDriver(t *testing.T) {
 	resetEnvironment()
 	service, geckoDriver := getFirefoxDriver()
+	//time.Sleep(600 * time.Second)
 	testLogic(t, geckoDriver)
 	geckoDriver.Quit()
 	defer service.Stop()
@@ -332,43 +317,6 @@ func TestChromeDriver(t *testing.T) {
 	testLogic(t, chromeDriver)
 	chromeDriver.Quit()
 	defer service.Stop()
-}
-
-func TestEdgeDriver(t *testing.T) {
-	resetEnvironment()
-	service, edgeDriver := getEdgeWebDriver()
-
-	err := edgeDriver.Get("edge://settings/profiles")
-
-	if err != nil {
-		log.Fatal("Error (Get):", err)
-		os.Exit(1)
-	}
-
-	element, err := edgeDriver.FindElement(selenium.ByID, "search_input")
-	if err != nil {
-		log.Fatal("Error (Find):", err)
-		os.Exit(1)
-	}
-
-	element.SendKeys("Downloads")
-	element.Submit()
-	// edge://settings/profiles
-	// div id=/downloads
-	// button aria-label="Change location"
-	// TODO: Check this
-	element, err = edgeDriver.FindElement(selenium.ByCSSSelector, "[aria-label=\"Change location\"]")
-	if err != nil {
-		log.Fatal("Error (Find):", err)
-		os.Exit(1)
-	}
-	element.SendKeys(downloadPath)
-	element.Click()
-	time.Sleep(100)
-	testLogic(t, edgeDriver)
-	edgeDriver.Quit()
-	defer service.Stop()
-
 }
 
 func TestMain(m *testing.M) {

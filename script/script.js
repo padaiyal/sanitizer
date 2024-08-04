@@ -58,6 +58,9 @@ function clearOutputs() {
 function addOutput(unsanitized_file_name, unsanitized_content, sanitized_file_name, sanitized_content, diffPatchText, ruleFilePath) {
     document.getElementById("display_panel").hidden = false;
 
+    console.log("Hello from addOutput");
+    console.log("Woor");
+    // console.log(unsanitized_content)
     const targetElement = document.createElement('div');
     targetElement.setAttribute('class', 'sanitized_diff_div');
     targetElement.setAttribute('id', 'sanitized_diff_div' + (diffDivElementsCount + 1));

@@ -129,6 +129,7 @@ func runRuleDetectionTask(ruleDetectionTaskInput RuleDetectionTaskInput, channel
 }
 
 func Sanitize(content string, fileExtension string, inputFileName string, outputFileName string, ruleSets map[string]RuleSet, config Config) (string, string, error) {
+	//println("File Content: ", content)
 	if !slices.Contains(config.SupportedFileExtensions, fileExtension) {
 		err := types.Error{Msg: "Unsupported file extension (" + fileExtension + "), Supported file extensions are " + strings.Join(config.SupportedFileExtensions, ",") + ""}
 		errorFollowUp(err, true)

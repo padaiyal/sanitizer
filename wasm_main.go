@@ -147,12 +147,14 @@ func sanitizeCallback(_ js.Value, _ []js.Value) any {
 
 				fileExtension := filepath.Ext(filePath)[1:]
 				println("Rule sets available: ", len(ruleSets))
+				println("ruleSets: ", ruleSets)
 				sanitizedFileName := generateSanitizedFileName(filePath)
 				sanitizedContent, diffPatchText, err := Sanitize(unsanitizedContent, fileExtension, filePath, sanitizedFileName, ruleSets, config)
 				if err != nil {
 					errorFollowUp(err, false)
 				}
 				println("Showing output. filePath=", filePath, ", index=", index, ", time=", time.Now().Unix())
+				println("Showin extra: ", diffPatchText)
 				js.Global().Call(
 					"addOutput",
 					filePath,
@@ -188,9 +190,11 @@ func main() {
 		_, err := getResponse(getRuleFilePath(supportedFileExtension), &ruleSetStruct)
 
 		if err != nil {
+			println("Found error loading rule set for " + supportedFileExtension + " files.")
 			errorFollowUp(err, false)
 		} else {
 			ruleSets[supportedFileExtension] = ruleSetStruct
+			println("ruleSet added:", ruleSetStruct.Format)
 			if allowedFileFormats != "" {
 				allowedFileFormats += ","
 			}
