@@ -8,8 +8,11 @@
     "outputFormat": "line-by-line",
     "synchronisedScroll": true,
     "highlight": true,
-    "renderNothingWhenEmpty": false
+    "renderNothingWhenEmpty": false,
+    "colorScheme": "light"
   },
+  "MaximumInputFilesThroughWebsite": 10,
+  "MaximumInputFileSizeThroughWebsiteInMB": 50,
   "RemovedSecretReplacement": "<REMOVED>",
   "SecretPrefix": "secret",
   "SupportedFileExtensions":  ["har"],
