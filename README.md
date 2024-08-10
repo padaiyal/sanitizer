@@ -4,14 +4,20 @@
 
 Identify and sanitize sensitive information.
 
-## Support
+## Features
+ - Sanitizes HAR files.
+ - Multiple files can be sanitized at the same time.<br>
+ - Support for sanitizing SAML requests/responses are in progress.
+
+### Supported Browsers
 The following browsers are supported:
  - Google Chrome
  - Firefox
 
-At the moment, it sanitizes HAR files.<br>
-Multiple files can be sanitized at the same time.<br>
-Support for sanitizing SAML requests/responses are in progress.
+### Limitations
+ - Maximum of 10 files can be sanitized at a time.
+ - Each file cannot exceed 50 MB.
+ - Only HAR files are supported.
 
 ## Build
 To build the WASM code, run `build_wasm`.
@@ -26,4 +32,4 @@ To run tests, run `run_tests`.
 ```
 
 ## Demo
-The tool can be accessed here - https://padaiyal.github.io/sanitizer/
+The tool can be accessed [here](https://padaiyal.github.io/sanitizer/).

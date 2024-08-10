@@ -10,11 +10,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall/js"
 	"time"
 )
+
+var jsGlobal = js.Global()
+var jsCall = jsGlobal.Call
 
 type RuleDetectionTaskInput struct {
 	Content      *string
@@ -49,10 +53,12 @@ func runTasks[I any, O any](task func(I, *chan O, *sync.WaitGroup), taskInputs *
 }
 
 type Config struct {
-	RemovedSecretReplacement string   `json:"RemovedSecretReplacement"`
-	SecretPrefix             string   `json:"SecretPrefix"`
-	SupportedFileExtensions  []string `json:"SupportedFileExtensions"`
-	SupportedActions         []string `json:"SupportedActions"`
+	MaximumInputFileSizeThroughWebsiteInMB int      `json:"MaximumInputFileSizeThroughWebsiteInMB"`
+	MaximumInputFilesThroughWebsite        int      `json:"MaximumInputFilesThroughWebsite"`
+	RemovedSecretReplacement               string   `json:"RemovedSecretReplacement"`
+	SecretPrefix                           string   `json:"SecretPrefix"`
+	SupportedFileExtensions                []string `json:"SupportedFileExtensions"`
+	SupportedActions                       []string `json:"SupportedActions"`
 }
 
 type RuleInfo struct {
@@ -68,7 +74,7 @@ type RuleSet struct {
 
 var config = Config{}
 var ruleSets = map[string]RuleSet{}
-var document = js.Global().Get("document")
+var document = jsGlobal.Get("document")
 
 func errorFollowUp(err error, exit bool) {
 	println("error=", err.Error())
@@ -123,30 +129,33 @@ func generateSanitizedFileName(filePath string) string {
 func sanitizeFileTask(file js.Value, errorsChannel *chan error, waitGroup *sync.WaitGroup) {
 	var err error = nil
 	file.Call("arrayBuffer").Call("then", js.FuncOf(func(v js.Value, x []js.Value) any {
-		data := js.Global().Get("Uint8Array").New(x[0])
+		data := jsGlobal.Get("Uint8Array").New(x[0])
 		dst := make([]byte, data.Get("length").Int())
 		js.CopyBytesToGo(dst, data)
-		unsanitizedContentBytes, err := toPrettyJson(dst)
-		if err != nil {
-			errorFollowUp(err, true)
-		}
-		unsanitizedContent := string(unsanitizedContentBytes)
 		filePath := file.Get("name").String()
 		fileExtension := filepath.Ext(filePath)[1:]
+		unsanitizedContentBytes, err := toPrettyJson(dst)
+		if err != nil {
+			jsCall("resetPageAfterAlert", "Error parsing '"+filePath+"' : "+err.Error())
+			errorFollowUp(err, false)
+			return nil
+		}
+		unsanitizedContent := string(unsanitizedContentBytes)
 		println("Rule sets available: ", len(ruleSets))
 		sanitizedFileName := generateSanitizedFileName(filePath)
-		sanitizedContent, diffPatchText, err := Sanitize(unsanitizedContent, fileExtension, filePath, sanitizedFileName, ruleSets, config)
+		sanitizedContent, diffPatchText, isDiffEmpty, err := Sanitize(unsanitizedContent, fileExtension, filePath, sanitizedFileName, ruleSets, config)
 		if err != nil {
 			errorFollowUp(err, false)
 		}
 		println("Showing output. filePath=", filePath, ", time=", time.Now().Unix())
-		js.Global().Call(
+		jsCall(
 			"addOutput",
 			filePath,
 			unsanitizedContent,
 			sanitizedFileName,
 			sanitizedContent,
 			diffPatchText,
+			isDiffEmpty,
 			getRuleFilePath(fileExtension),
 		)
 		return nil
@@ -164,15 +173,31 @@ func sanitizeCallbackFromJS(_ js.Value, _ []js.Value) any {
 	filesCount := filesElement.Get("length").Int()
 	if filesCount <= 0 {
 		return nil
+	} else if filesCount > config.MaximumInputFilesThroughWebsite {
+		jsCall("resetPageAfterAlert", "Cannot sanitize more than "+strconv.Itoa(config.MaximumInputFilesThroughWebsite)+" files at a time.\nSelect a lesser number of files.")
 	} else {
-		js.Global().Call("clearOutputs")
+		jsCall("clearOutputs")
+		jsCall("showDisplayPanel")
+		jsCall("showSpinner")
 		files := make([]js.Value, filesCount)
+		filesIterated := map[string]int{}
 		for index := 0; index < filesCount; index++ {
-			files[index] = filesElement.Call("item", index)
+			file := filesElement.Call("item", index)
+			fileSizeInMB := file.Get("size").Int() / (1024 * 1024)
+			filePath := file.Get("name").String()
+			if fileSizeInMB > config.MaximumInputFileSizeThroughWebsiteInMB {
+				jsCall("resetPageAfterAlert", "Size of file "+filePath+" ("+strconv.Itoa(fileSizeInMB)+" MB) exceeds maximum supported file size of "+strconv.Itoa(config.MaximumInputFileSizeThroughWebsiteInMB)+" MB.")
+				return nil
+			}
+			if _, isPresent := filesIterated[filePath]; isPresent {
+				jsCall("resetPageAfterAlert", "Multiple files with the same name ("+filePath+") isn't supported. Please choose files with different names.")
+				return nil
+			}
+			filesIterated[filePath] = 1
+			files[index] = file
 		}
 		_ = runTasks(sanitizeFileTask, &files)
 	}
-
 	return nil
 }
 

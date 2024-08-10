@@ -28,10 +28,14 @@ func convertJsonPathToKey(jsonPath string) string {
 	return jsonKey
 }
 
-func getDiff(originalContent string, originalFileName string, modifiedContent string, modifiedFileName string) string {
+func getDiff(originalContent string, originalFileName string, modifiedContent string, modifiedFileName string) (string, bool) {
 	edits := myers.ComputeEdits(span.URIFromPath(originalFileName), originalContent, modifiedContent)
 	diff := fmt.Sprint(gotextdiff.ToUnified(originalFileName, modifiedFileName, originalContent, edits))
-	return diff
+	isEmptyDiff := len(diff) == 0
+	if isEmptyDiff {
+		diff = "--- " + originalFileName + "\n+++ " + modifiedFileName + "\n"
+	}
+	return diff, isEmptyDiff
 }
 
 func getSecretReplacement(secret string, secretPatterns []string, prefix string) (string, error) {
@@ -128,7 +132,7 @@ func runRuleDetectionTask(ruleDetectionTaskInput RuleDetectionTaskInput, channel
 	waitGroup.Done()
 }
 
-func Sanitize(content string, fileExtension string, inputFileName string, outputFileName string, ruleSets map[string]RuleSet, config Config) (string, string, error) {
+func Sanitize(content string, fileExtension string, inputFileName string, outputFileName string, ruleSets map[string]RuleSet, config Config) (string, string, bool, error) {
 	if !slices.Contains(config.SupportedFileExtensions, fileExtension) {
 		err := types.Error{Msg: "Unsupported file extension (" + fileExtension + "), Supported file extensions are " + strings.Join(config.SupportedFileExtensions, ",") + ""}
 		errorFollowUp(err, true)
@@ -141,7 +145,7 @@ func Sanitize(content string, fileExtension string, inputFileName string, output
 			err,
 			false,
 		)
-		return "", "", err
+		return "", "", true, err
 	}
 	println("Format = ", ruleSet.Format)
 	println("Description = ", ruleSet.Description)
@@ -177,6 +181,6 @@ func Sanitize(content string, fileExtension string, inputFileName string, output
 		errorFollowUp(err, true)
 	}
 	sanitizedContent = string(sanitizedContentBytes)
-	diffPatchText := getDiff(content, inputFileName, sanitizedContent, outputFileName)
-	return sanitizedContent, diffPatchText, nil
+	diffPatchText, isDiffEmpty := getDiff(content, inputFileName, sanitizedContent, outputFileName)
+	return sanitizedContent, diffPatchText, isDiffEmpty, nil
 }

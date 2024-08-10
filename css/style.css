@@ -16,9 +16,9 @@ h1 {
 }
 
 #display_card {
-    width: 90%;
+    width: 100%;
     min-height: 750px;
-    margin: 20px auto;
+    margin: 10px auto;
 }
 
 #spinner_container {
@@ -46,10 +46,7 @@ h1 {
     max-height: 620px;
 }
 
-#buttons {
-    align-self: end;
-}
-
-#view_rules_button, #download_button {
-    margin: 10px 10px 0px 0px;
+#view_rules_button, #download_button, #download_button_label {
+    visibility: hidden;
+    margin: 0px 10px 0px 0px;
 }
