@@ -4,17 +4,17 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Sanitizer</title>
-
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧹</text></svg>">
         <meta name="theme-color" content="#fafafa">
         <!-- Custom styles -->
         <link href="css/style.css" rel="stylesheet" type="text/css" />
-        <link href="css/bootstrap.min.css" rel="stylesheet">
+        <link href="css/bootstrap.css" rel="stylesheet">
         <!-- https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.7.1/styles/github.min.css -->
         <link rel="stylesheet" href="css/github.min.css" />
         <!-- https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css -->
         <link rel="stylesheet" type="text/css" href="css/diff2html.min.css" />
 
-        <script src="script/lib/bootstrap.bundle.min.js"></script>
+        <script src="script/lib/bootstrap.bundle.js"></script>
         <!--    &lt;!&ndash; https://github.com/rtfpessoa/diff2html &ndash;&gt;-->
         <script src="script/lib/diff2html-ui.min.js"></script>
         <script src="script/script.js"></script>
@@ -31,27 +31,31 @@
     </head>
 
     <body onload="init()">
-        <h1 id="title">Sensitive Info Sanitizer</h1>
-        <div id="uploader">
-            <input type="file" id="upload_button" name="upload_button" class="form-control" multiple="multiple"/>
-        </div>
-
-        <div id="display_panel" hidden>
-            <div id="display_card" class="card">
-                <div id="buttons">
+        <nav class="navbar fixed-top navbar-expand-lg navbar-dark bg-dark" style="padding: 10px">
+            <div class="container-fluid" style="padding: 0;">
+                <a class="navbar-brand" href="#">🧹 Sensitive Info Sanitizer</a>
+                <form class="form-inline" style="margin-left: auto">
                     <input type="button" id="view_rules_button" class="btn btn-secondary" name="view_rules_button"
                            value="View Rules File/s" disabled>
-                    <input type="button" id="download_button" class="btn btn-success" name="download_button"
-                           value="Download Sanitized File/s" disabled>
-                </div>
+                    <label for="download_button" id="download_button_label" class="btn btn-success">Download Sanitized File/s<span id="sanitized_files_count" class="badge bg-black bg-opacity-25" style="margin-left: 10px" hidden></span></label>
+                    <input type="button" id="download_button" style="display:none;" class="btn btn-success" name="download_button" disabled>
+                    <label for="upload_button" class="btn btn-primary">Select files</label>
+                    <input type="file" id="upload_button" name="upload_button" style="display:none;" class="form-control" multiple="multiple"/>
+                    <a href="https://github.com/padaiyal/sanitizer" target="_blank" style="margin-left: 10px">
+                        <img src="img/github-mark-white.png" alt="Link to GitHub repository" style="width: 25px">
+                    </a>
+                </form>
+            </div>
+        </nav>
+        <div id="display_panel" style="padding-top: 50px" hidden>
+            <div id="display_card" class="card" style="border: none">
                 <div id="output" class="card-body">
-                    <div id="overlay-spinner">
-                        <div class="w-100 d-flex justify-content-center align-items-center" id="spinner_container">
-                            <div class="spinner-border text-success" id="spinner"></div>
-                        </div>
+                </div>
+                <div id="overlay-spinner">
+                    <div class="w-100 d-flex justify-content-center align-items-center" id="spinner_container">
+                        <div class="spinner-border text-success" id="spinner"></div>
                     </div>
                 </div>
-                <div class="card-footer text-body-secondary" id="downloader"></div>
             </div>
         </div>
     </body>
