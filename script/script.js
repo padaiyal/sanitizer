@@ -8,8 +8,26 @@ function init() {
     console.log('Initializing...')
     fetch("script/config.json")
         .then(response => response.json())
-        .then((data) => {config = data;})
+        .then((data) => {
+            config = data;
+
+            const titleText = getConfig("WebsiteTitle", "Sensitive Info Sanitizer");
+            setTitle(titleText);
+
+            const iconPath = getConfig("WebsiteIconPath");
+            setIcon(iconPath);
+        })
         .catch(error => errorFollowUp(error));
+}
+
+function setTitle(titleText) {
+    document.getElementById("title").innerText = titleText;
+    document.getElementById("navbar_title").innerText = titleText;
+}
+
+function setIcon(iconPath) {
+    document.getElementById("tab_icon").setAttribute("href", iconPath);
+    document.getElementById("navbar_icon").setAttribute("src", iconPath);
 }
 
 function errorFollowUp(message) {

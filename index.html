@@ -3,8 +3,8 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Sanitizer</title>
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧹</text></svg>">
+        <title id="title">Sanitizer</title>
+        <link id="tab_icon" rel="icon" href="">
         <meta name="theme-color" content="#fafafa">
         <!-- Custom styles -->
         <link href="css/style.css" rel="stylesheet" type="text/css" />
@@ -33,7 +33,10 @@
     <body onload="init()">
         <nav class="navbar fixed-top navbar-expand-lg navbar-dark bg-dark" style="padding: 10px">
             <div class="container-fluid" style="padding: 0;">
-                <a class="navbar-brand" href="#">🧹 Sensitive Info Sanitizer</a>
+                <a href="#" target="_blank" style="margin-right: 10px">
+                    <img id="navbar_icon" src="" style="width: 25px">
+                </a>
+                <a id="navbar_title" class="navbar-brand" href="#">Sensitive Info Sanitizer</a>
                 <form class="form-inline" style="margin-left: auto">
                     <input type="button" id="view_rules_button" class="btn btn-secondary" name="view_rules_button"
                            value="View Rules File/s" disabled>
