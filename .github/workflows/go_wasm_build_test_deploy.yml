@@ -5,13 +5,16 @@ name: Go WASM - Build, Test & Deploy
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main"]
   pull_request:
     branches: [ "main" ]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest]
     permissions:
       # Give the default GITHUB_TOKEN write permission to commit and push the
       # added or changed files to the repository.
@@ -26,12 +29,11 @@ jobs:
 
     - name: Build
       run: ./build_wasm
-
     - name: Test
-      run: ./run_tests
+      run: go test -v ./tests/e2e
 
     - name: Commit and push WASM static pages
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' && github.ref_name == 'main' && matrix.os == 'ubuntu-latest'
       env:
         CI_COMMIT_MESSAGE: Add WASM static pages - $(date +'%Y-%m-%dT%H:%M:%S')
         CI_COMMIT_AUTHOR: padaiyal

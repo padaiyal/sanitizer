@@ -236,6 +236,8 @@ func main() {
 	uploadButton.Call("setAttribute", "accept", allowedFileFormats)
 	// Set the callback to invoke when a file is selected.
 	uploadButton.Set("oninput", js.FuncOf(sanitizeCallbackFromJS))
+	// Shows that the button is ready for input
+	uploadButton.Call("setAttribute", "ready", true)
 
 	// Keep the script running for callbacks to be processed.
 	select {}
