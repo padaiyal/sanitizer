@@ -27,25 +27,31 @@ var currentPath, _ = filepath.Abs(".")
 var downloadPath = filepath.Join(currentPath, "tmp")
 var server *http.Server
 var rulesFile = "rules/har.yaml"
-var fileToSanitize = "./resources/hars/github.com.har"
-var expectedFileToDownload = filepath.Join(downloadPath, "github.com_sanitized.har")
 var seleniumPort = 4444
 var sanitizeFileToExpectedSanitation = map[string][][]string{}
 var changedLines = map[string]map[int]string{}
 
 /**
-{
-	fileToSanitize: {
-		beforeSanitation1: afterSanitation1,
-		beforeSanitation2: afterSanitation2,
- },
-	fileToSanitize2 :{ ... },
+Example formats
+sanitizeFileToExpectedSanitation = {
+	fileToSanitizeName1: [lineBeforeSanitization1, lineAfterSanitization1], [lineBeforeSanitization2, lineAfterSanitization2], ...],
+	fileToSanitizeName2: [[...], ...],
 	...
+}
+
+changedLines = {
+	sanitizedFileName1: {
+		lineNum1: lineAfterSanitization1,
+		lineNum2: lineAfterSanitization2,
+		...
+	},
+	sanitizedFileName2: {...},
 }
 */
 
 func prepareMapTestScenario() {
 	sanitizeFileToExpectedSanitation["github.com.har"] = [][]string{{"password12345", "<REMOVED>"}}
+
 }
 
 func getChromeDriver() (*selenium.Service, selenium.WebDriver) {
@@ -131,7 +137,6 @@ func runHtmlServer() {
 
 func setUp() {
 	go runHtmlServer()
-	os.Mkdir(downloadPath, 0700)
 
 }
 
@@ -150,23 +155,6 @@ func tearDown() {
 		os.Exit(1)
 	}
 
-}
-
-func uploadFile(webDriver selenium.WebDriver, fileToSanitize string) {
-	fmt.Print(webDriver)
-	productElement, err := webDriver.FindElement(selenium.ByID, "upload_button")
-	if err != nil {
-		log.Fatal("Error finding upload button:", err)
-		os.Exit(1)
-	}
-
-	absPath, err := filepath.Abs(fileToSanitize)
-	if err != nil {
-		log.Fatalf("Error retrieving absolute path for file %s: %s", fileToSanitize, err)
-	}
-
-	productElement.SendKeys(absPath)
-	productElement.Click()
 }
 
 func uploadFiles(webDriver selenium.WebDriver, filesToSanitize []string) {
@@ -305,14 +293,14 @@ func testLogic(t *testing.T, webDriver selenium.WebDriver) {
 	}
 
 	// Check download
-	downloadButton, _ := webDriver.FindElement(selenium.ByID, "download_button")
+	downloadButton, _ := webDriver.FindElement(selenium.ByID, "download_button_label")
 	downloadButton.Click()
 	time.Sleep(25 * time.Second)
 
-	_, downloadedFileError := os.Stat(expectedFileToDownload)
-	assert.Nil(t, downloadedFileError, downloadedFileError)
 	for sanitizedFileName := range changedLines {
 		expectedFileToDownloadPath := filepath.Join(downloadPath, sanitizedFileName)
+		_, downloadedFileError := os.Stat(expectedFileToDownloadPath)
+		assert.Nil(t, downloadedFileError, downloadedFileError)
 		verifyDownloadedFile(t, expectedFileToDownloadPath, changedLines[sanitizedFileName])
 	}
 
@@ -355,7 +343,7 @@ func verifyViewRules(t *testing.T, webDriver selenium.WebDriver) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 2, len(handles), "No new window was opend. Expected 2 but got %d", len(handles))
+	assert.Equal(t, 2, len(handles), "No new window was opened. Expected 2 but got %d", len(handles))
 
 	// assert there's two windows
 	webDriver.SwitchWindow(handles[1])
@@ -367,23 +355,25 @@ func verifyViewRules(t *testing.T, webDriver selenium.WebDriver) {
 }
 
 func resetEnvironment() {
-
-	_, err := os.Stat(expectedFileToDownload)
-	if err != nil {
-		return
+	_, err := os.Stat(downloadPath)
+	if err == nil {
+		err = os.RemoveAll(downloadPath)
+		if err != nil {
+			log.Fatal("Could not delete download path (", downloadPath, "). Failing tests...", err)
+		}
+	} else if !os.IsNotExist(err) {
+		log.Fatal("Could not check if download path (", downloadPath, ") exists. Failing tests...", err)
 	}
+	err = os.Mkdir(downloadPath, 0700)
 
-	err = os.Remove(expectedFileToDownload)
 	if err != nil {
-		log.Fatalf("Error cleaning file: %v", err)
-		os.Exit(1)
+		log.Fatal("Could create download path (", downloadPath, ")", err)
 	}
 }
 
 func TestFirefoxDriver(t *testing.T) {
 	resetEnvironment()
 	service, geckoDriver := getFirefoxDriver()
-	//time.Sleep(600 * time.Second)
 	testLogic(t, geckoDriver)
 	geckoDriver.Quit()
 	defer service.Stop()
@@ -392,8 +382,17 @@ func TestFirefoxDriver(t *testing.T) {
 func TestChromeDriver(t *testing.T) {
 	resetEnvironment()
 	service, chromeDriver := getChromeDriver()
-	//time.Sleep(600 * time.Second)
 	testLogic(t, chromeDriver)
+	chromeDriver.Quit()
+	defer service.Stop()
+}
+
+func TestInvalidHarFile(t *testing.T) {
+	resetEnvironment()
+	service, chromeDriver := getChromeDriver()
+	filesToSanitize := []string{"invalid_har"}
+	uploadFiles(chromeDriver, filesToSanitize)
+	// check that alert is raised
 	chromeDriver.Quit()
 	defer service.Stop()
 }
