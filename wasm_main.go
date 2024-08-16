@@ -177,8 +177,8 @@ func sanitizeCallbackFromJS(_ js.Value, _ []js.Value) any {
 		jsCall("resetPageAfterAlert", "Cannot sanitize more than "+strconv.Itoa(config.MaximumInputFilesThroughWebsite)+" files at a time.\nSelect a lesser number of files.")
 	} else {
 		jsCall("clearOutputs")
-		jsCall("showDisplayPanel")
-		jsCall("showSpinner")
+		jsCall("showElement", "display_panel")
+		jsCall("showElement", "overlay-spinner", "flex")
 		files := make([]js.Value, filesCount)
 		filesIterated := map[string]int{}
 		for index := 0; index < filesCount; index++ {

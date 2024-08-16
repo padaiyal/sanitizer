@@ -4,103 +4,6 @@ let diffDivElementsCount = 0;
 let ruleFiles = new Set()
 let sanitizedFileContents = {}
 
-function init() {
-    console.log('Initializing...')
-    fetch("script/config.json")
-        .then(response => response.json())
-        .then((data) => {
-            config = data;
-
-            const titleText = getConfig("WebsiteTitle", "Sensitive Info Sanitizer");
-            setTitle(titleText);
-
-            const iconPath = getConfig("WebsiteIconPath");
-            setIcon(iconPath);
-        })
-        .catch(error => errorFollowUp(error));
-}
-
-function setTitle(titleText) {
-    document.getElementById("title").innerText = titleText;
-    document.getElementById("navbar_title").innerText = titleText;
-}
-
-function setIcon(iconPath) {
-    document.getElementById("tab_icon").setAttribute("href", iconPath);
-    document.getElementById("navbar_icon").setAttribute("src", iconPath);
-}
-
-function errorFollowUp(message) {
-    console.error(message);
-    alert(message);
-}
-
-function getConfig(key, defaultValue=null) {
-    const typeOfKey = typeof key;
-    let errorMessage = null;
-
-    if(typeOfKey !== "string") {
-        errorMessage = `InvalidConfigKeyType: ${key} is of type ${typeOfKey}.
-                        It should be a string.`;
-    } else if(!(key in config)) {
-        errorMessage = `ConfigKeyNotFound: ${key} not in config.`;
-    }
-
-    if(errorMessage != null) {
-        errorFollowUp(errorMessage);
-        return defaultValue;
-    }
-
-    return config[key];
-}
-
-function resetPageAfterAlert(alertText) {
-    alert(alertText);
-    const uploadButton = document.getElementById('upload_button');
-    uploadButton.value = "";
-    clearOutputs();
-}
-
-function toggleElementEnableState(id, enabled) {
-    const element = document.getElementById(id);
-    element.disabled = false;
-    const elementLabel = document.getElementById(id + '_label');
-    if (elementLabel != null) {
-        if (enabled) {
-            elementLabel.classList.remove("disabled");
-        } else {
-            elementLabel.classList.add("disabled");
-        }
-    }
-}
-
-function disableElement(id) {
-    toggleElementEnableState(id, false);
-}
-
-function enableElement(id) {
-    toggleElementEnableState(id, true);
-}
-
-function clearOutputs() {
-    hideDisplayPanel();
-    document.getElementById('output').innerHTML = '';
-    diffDivElementsCount = 0;
-    diff = "";
-
-    ruleFiles = new Set();
-    sanitizedFileContents = {};
-
-    const viewRulesButton = document.getElementById("view_rules_button");
-    viewRulesButton.onclick = function() {openRuleFiles();}
-    enableElement("view_rules_button");
-
-    const downloadButton = document.getElementById("download_button");
-    downloadButton.onclick = function() {downloadSanitizedContent();}
-    enableElement("download_button");
-    setSanitizedFilesCount(-1);
-}
-
 function addOutput(unsanitized_file_name, unsanitized_content, sanitized_file_name, sanitized_content, diffPatchText, isDiffEmpty, ruleFilePath) {
     if(!isDiffEmpty) {
         // Only consider diff patches for files that have changed during sanitization.
@@ -123,21 +26,28 @@ function addOutput(unsanitized_file_name, unsanitized_content, sanitized_file_na
     }
 }
 
-function createHTMLElement(tag, id, cls, parentId, innerText) {
-    const htmlElement = document.createElement(tag);
-    if (cls != null) {
-        htmlElement.setAttribute('class', cls);
-    }
-    if (id != null) {
-        htmlElement.setAttribute('id', id);
-    }
-    if (parentId != null) {
-        document.getElementById(parentId).appendChild(htmlElement);
-    }
-    if (innerText != null) {
-        htmlElement.innerText = innerText;
-    }
-    return htmlElement
+function clearInputs() {
+    const uploadButton = document.getElementById('upload_button');
+    uploadButton.value = "";
+}
+
+function clearOutputs() {
+    hideElement("display_panel");
+    document.getElementById('output').innerHTML = '';
+    diffDivElementsCount = 0;
+    diff = "";
+
+    ruleFiles = new Set();
+    sanitizedFileContents = {};
+
+    const viewRulesButton = document.getElementById("view_rules_button");
+    viewRulesButton.onclick = function() {openNewTabs(ruleFiles);}
+    enableElement("view_rules_button");
+
+    const downloadButton = document.getElementById("download_button");
+    downloadButton.onclick = function() {downloadSanitizedContent();}
+    enableElement("download_button");
+    setSanitizedFilesCount(-1);
 }
 
 function displayOutput() {
@@ -174,23 +84,57 @@ function displayOutput() {
     }
     document.getElementById("view_rules_button").style.visibility = "visible";
     document.getElementById("download_button_label").style.visibility = "visible";
-    hideSpinner();
+    hideElement("overlay-spinner");
 }
 
-function hideSpinner() {
-    document.getElementById("overlay-spinner").style.display="none";
+function downloadSanitizedContent() {
+    for (const filePath in sanitizedFileContents) {
+        if (!sanitizedFileContents[filePath]['isDiffEmpty']) {
+            downloadContent(sanitizedFileContents[filePath]['sanitizedFileName'], sanitizedFileContents[filePath]['content'])
+        }
+    }
 }
 
-function showSpinner() {
-    document.getElementById("overlay-spinner").style.display="flex";
+function getConfig(key, defaultValue=null) {
+    const typeOfKey = typeof key;
+    let errorMessage = null;
+
+    if(typeOfKey !== "string") {
+        errorMessage = `InvalidConfigKeyType: ${key} is of type ${typeOfKey}.
+                        It should be a string.`;
+    } else if(!(key in config)) {
+        errorMessage = `ConfigKeyNotFound: ${key} not in config.`;
+    }
+
+    if(errorMessage != null) {
+        errorFollowUp(errorMessage);
+        return defaultValue;
+    }
+
+    return config[key];
 }
 
-function hideDisplayPanel() {
-    document.getElementById("display_panel").hidden = true;
+function init() {
+    console.log("Initializing...");
+    hideElement("display_panel");
+    fetch("script/config.json")
+        .then(response => response.json())
+        .then((data) => {
+            config = data;
+
+            const titleText = getConfig("WebsiteTitle", "Sensitive Info Sanitizer");
+            setTitle(titleText);
+
+            const iconPath = getConfig("WebsiteIconPath");
+            setIcon(iconPath);
+        })
+        .catch(error => errorFollowUp(error));
 }
 
-function showDisplayPanel() {
-    document.getElementById("display_panel").hidden = false;
+function resetPageAfterAlert(alertText) {
+    alert(alertText);
+    clearInputs();
+    clearOutputs();
 }
 
 function setSanitizedFilesCount(sanitizedFilesCount) {
@@ -203,30 +147,4 @@ function setSanitizedFilesCount(sanitizedFilesCount) {
         sanitizedFilesCountElement.innerText = "";
         sanitizedFilesCountElement.hidden = true;
     }
-}
-
-function openRuleFiles() {
-    console.log(ruleFiles);
-    for (const ruleFilePath of ruleFiles) {
-        console.log(ruleFilePath);
-        window.open(ruleFilePath, '_blank').focus();
-    }
-}
-
-function downloadSanitizedContent() {
-    for (const filePath in sanitizedFileContents) {
-        if (!sanitizedFileContents[filePath]['isDiffEmpty']) {
-            downloadContent(sanitizedFileContents[filePath]['sanitizedFileName'], sanitizedFileContents[filePath]['content'])
-        }
-    }
-}
-
-function downloadContent(filename, text) {
-    const element = document.createElement('a');
-    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
-    element.setAttribute('download', filename);
-    element.style.display = 'none';
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
 }
