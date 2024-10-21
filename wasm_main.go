@@ -219,9 +219,11 @@ func main() {
 		_, err := getResponse(getRuleFilePath(supportedFileExtension), &ruleSetStruct)
 
 		if err != nil {
+			println("Found error loading rule set for " + supportedFileExtension + " files.")
 			errorFollowUp(err, false)
 		} else {
 			ruleSets[supportedFileExtension] = ruleSetStruct
+			println("ruleSet added:", ruleSetStruct.Format)
 			if allowedFileFormats != "" {
 				allowedFileFormats += ","
 			}
@@ -234,6 +236,8 @@ func main() {
 	uploadButton.Call("setAttribute", "accept", allowedFileFormats)
 	// Set the callback to invoke when a file is selected.
 	uploadButton.Set("oninput", js.FuncOf(sanitizeCallbackFromJS))
+	// Shows that the button is ready for input
+	uploadButton.Call("setAttribute", "ready", true)
 
 	// Keep the script running for callbacks to be processed.
 	select {}
