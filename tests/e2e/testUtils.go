@@ -37,25 +37,36 @@ func GetDriver(driverType string) (*selenium.Service, selenium.WebDriver, error)
 	caps := selenium.Capabilities{}
 	prefs := make(map[string]interface{})
 	osType := runtime.GOOS
-	path := "resources/drivers"
 	args := []string{"--headless"}
+	path, err := filepath.Abs("../../depot/webdriver")
+	if err != nil {
+		return nil, nil, fmt.Errorf("error getting absolute path of depot/webdriver: %s", err)
+	}
 
 	if driverType == FIREFOX {
-		fullPath = filepath.Join(currentPath, path, osType, "geckodriver")
+		fmt.Printf("BROWSER PATH: %s", os.Getenv("FIREFOX_BROWSER_PATH"))
+		//fullPath = filepath.Join(currentPath, path, osType, "geckodriver")
+		fullPath = filepath.Join(path, fmt.Sprintf("geckodriver_%s_%s", osType, os.Getenv("GECKO_DRIVER_VERSION")))
+		fmt.Printf("This is the driver path: %s", fullPath)
 		service, err = selenium.NewGeckoDriverService(fullPath, seleniumPort)
 		prefs["browser.download.dir"] = DownloadPath
 		prefs["browser.download.folderList"] = 2
 
-		caps.AddFirefox(firefox.Capabilities{Prefs: prefs, Args: args})
+		caps.AddFirefox(firefox.Capabilities{Binary: os.Getenv("FIREFOX_BROWSER_PATH"), Prefs: prefs, Args: args})
 
 		urlPrefix = fmt.Sprintf("http://localhost:%d", seleniumPort)
 
 	} else if driverType == CHROME {
-		fullPath = filepath.Join(currentPath, path, osType, "chromedriver")
+		fmt.Printf("BROWSER PATH: %s", os.Getenv("CHROME_BROWSER_PATH"))
+		//fullPath = filepath.Join(currentPath, path, osType, "chromedriver")
+		fullPath = filepath.Join(path, fmt.Sprintf("chromedriver_%s_%s", osType, os.Getenv("CHROME_DRIVER_VERSION")))
 		service, err = selenium.NewChromeDriverService(fullPath, seleniumPort)
 		prefs["download.default_directory"] = DownloadPath
 		prefs["profile.default_content_setting_values.automatic_downloads"] = 1
-		caps.AddChrome(chrome.Capabilities{Prefs: prefs, Args: args})
+		fmt.Printf("This is the driver path: %s", fullPath)
+		//args = append(args, "--disable-dev-shm-usage")
+		args = append(args, "--no-sandbox")
+		caps.AddChrome(chrome.Capabilities{Path: os.Getenv("CHROME_BROWSER_PATH"), Prefs: prefs, Args: args})
 
 	} else {
 		return nil, nil, fmt.Errorf("unsupported driver type: %s", driverType)

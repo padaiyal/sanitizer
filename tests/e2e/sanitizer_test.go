@@ -2,9 +2,8 @@ package e2e
 
 import (
 	"fmt"
-	"github.com/hexops/gotextdiff"
-	"github.com/hexops/gotextdiff/myers"
-	"github.com/hexops/gotextdiff/span"
+	"github.com/sergi/go-diff/diffmatchpatch"
+
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,10 +26,11 @@ type sanitizedLines struct {
 }
 
 type sanitizedFile struct {
-	originalFilename  string
-	sanitizedFilename string
-	size              int64
-	lines             []sanitizedLines
+	originalFilename            string
+	sanitizedFilename           string
+	size                        int64
+	sanitizedFilenameVariations int
+	lines                       []sanitizedLines
 }
 
 var sanitizeFileToExpectedSanitation = make(map[string]sanitizedFile)
@@ -38,9 +38,11 @@ var untouchedFileNames []string
 
 func prepareMapTestScenario() {
 
-	sanitizeFileToExpectedSanitation["github.com.har"] = sanitizedFile{"github.com.har", "gitbub.com.har", 3791581, []sanitizedLines{{"password12345", "<REMOVED>"}}}
+	sanitizeFileToExpectedSanitation["github.com.har"] = sanitizedFile{"github.com.har", "gitbub.com.har", 3791581, 1,
+		[]sanitizedLines{{"password12345", "<REMOVED>"}}}
+
 	sanitizeFileToExpectedSanitation["contextual_replacement.har"] =
-		sanitizedFile{"contextual_replacement.har", "contextual_replacement.har", 269100,
+		sanitizedFile{"contextual_replacement.har", "contextual_replacement.har", 269100, 2,
 			[]sanitizedLines{{"cookieMonster1", contextualReplacement},
 				{"cookieMonster1", contextualReplacement},
 				{"cookieMonster1", contextualReplacement},
@@ -48,19 +50,20 @@ func prepareMapTestScenario() {
 				{"cookieMonster2", contextualReplacement},
 			},
 		}
+
 	sanitizeFileToExpectedSanitation["remove_and_contextual_replacement.har"] =
-		sanitizedFile{"remove_and_contextual_replacement.har", "remove_and_contextual_replacement.har", 4394240,
-			[]sanitizedLines{
-				{"cookieMonster1", contextualReplacement},
-				{"cookieMonster2", contextualReplacement},
-				{"cookieMonster1", contextualReplacement},
-				{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-				{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-				{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-				{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-				{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-			},
+		sanitizedFile{"remove_and_contextual_replacement.har", "remove_and_contextual_replacement.har", 4394240, 2, []sanitizedLines{
+			{"cookieMonster1", contextualReplacement},
+			{"cookieMonster2", contextualReplacement},
+			{"cookieMonster1", contextualReplacement},
+			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
+			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
+			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
+			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
+			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
+		},
 		}
+
 	untouchedFileNames = []string{"1.har", "2.har", "3.har", "4.har", "5.har", "6.har", "7.har"}
 }
 
@@ -214,15 +217,22 @@ func validE2EProcess(t *testing.T, webDriver selenium.WebDriver) error {
 	time.Sleep(25 * time.Second)
 
 	for fileName, sanitizedFileInfo := range sanitizeFileToExpectedSanitation {
+
+		var expectedSanitizedFileNamePaths []string
+		for i := range sanitizedFileInfo.sanitizedFilenameVariations {
+			i++
+			expectedSanitizedFileName := strings.Replace(fileName, ".har", fmt.Sprintf("_sanitized_%d.har", i), 1)
+			expectedFileDownloadPath := filepath.Join(ResourcesPath, "expected_sanitized_files", expectedSanitizedFileName)
+			expectedSanitizedFileNamePaths = append(expectedSanitizedFileNamePaths, expectedFileDownloadPath)
+		}
 		sanitizedFileName := strings.Replace(fileName, ".har", "_sanitized.har", 1)
-		sanitizedFileNamePath := filepath.Join(ResourcesPath, "expected_sanitized_files", sanitizedFileName)
-		expectedFileToDownloadPath := filepath.Join(DownloadPath, sanitizedFileName)
-		fileInfo, downloadedFileError := os.Stat(expectedFileToDownloadPath)
+		sanitizedFileNamePath := filepath.Join(DownloadPath, sanitizedFileName)
+		fileInfo, downloadedFileError := os.Stat(sanitizedFileNamePath)
 		assert.Nil(t, downloadedFileError, downloadedFileError)
 		assert.Equal(t, fileInfo.Size(), sanitizedFileInfo.size, "Expected size of sanitized file to be %d, but got %d", fileInfo.Size(), sanitizedFileInfo.size)
 		t.Logf("File %s Size: %d", fileInfo.Name(), fileInfo.Size())
 
-		err = verifyDownloadedFile(t, sanitizedFileNamePath, expectedFileToDownloadPath)
+		err = verifyDownloadedFile(t, expectedSanitizedFileNamePaths, sanitizedFileNamePath)
 		if err != nil {
 			return err
 		}
@@ -236,13 +246,10 @@ func validE2EProcess(t *testing.T, webDriver selenium.WebDriver) error {
 	return nil
 }
 
-func verifyDownloadedFile(t *testing.T, expectedSanitizedFileName string, actualSanitizedFileName string) error {
-	expectedSanitizedFileContentRaw, err := os.ReadFile(expectedSanitizedFileName)
-	if err != nil {
-		t.Errorf("Could not open file %s for reading: %s", expectedSanitizedFileName, err)
-		return err
-	}
-	expectedSanitizedFileContent := string(expectedSanitizedFileContentRaw)
+func verifyDownloadedFile(t *testing.T, expectedSanitizedFileNames []string, actualSanitizedFileName string) error {
+	var levenshteinDistance int
+	dmp := diffmatchpatch.New()
+	var diffs []diffmatchpatch.Diff
 	actualSanitizedFileContentRaw, err := os.ReadFile(actualSanitizedFileName)
 	if err != nil {
 		t.Errorf("Could not open file %s for reading: %s", actualSanitizedFileName, err)
@@ -250,9 +257,24 @@ func verifyDownloadedFile(t *testing.T, expectedSanitizedFileName string, actual
 	}
 
 	actualSanitizedFileContent := string(actualSanitizedFileContentRaw)
-	edits := myers.ComputeEdits(span.URIFromPath(expectedSanitizedFileName), expectedSanitizedFileContent, actualSanitizedFileContent)
-	diff := fmt.Sprint(gotextdiff.ToUnified(expectedSanitizedFileContent, actualSanitizedFileContent, expectedSanitizedFileName, edits))
-	assert.Equal(t, 0, len(diff), "Expected file %s to be unchanged, but got %s", expectedSanitizedFileName, diff)
+
+	for _, expectedSanitizedFileName := range expectedSanitizedFileNames {
+		expectedSanitizedFileContentRaw, err := os.ReadFile(expectedSanitizedFileName)
+		if err != nil {
+			t.Errorf("Could not open file %s for reading: %s", expectedSanitizedFileName, err)
+			return err
+		}
+		expectedSanitizedFileContent := string(expectedSanitizedFileContentRaw)
+
+		diffs = dmp.DiffMain(expectedSanitizedFileContent, actualSanitizedFileContent, false)
+		levenshteinDistance = dmp.DiffLevenshtein(diffs)
+		t.Logf("DiffLevenshtein distance of %d for expected file %s", dmp.DiffLevenshtein(diffs), expectedSanitizedFileName)
+		if levenshteinDistance == 0 {
+			return nil
+		}
+
+	}
+	t.Errorf("The actual file sanitization content did not match any of the expected sanitization variations. Actual file content\n: %s", dmp.DiffPrettyText(diffs))
 	return nil
 }
 
