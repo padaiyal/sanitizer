@@ -1,2 +1,0 @@
-geckodriver=0.35.0
-chromedriver=129.0.6668.100
