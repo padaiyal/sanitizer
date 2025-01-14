@@ -258,7 +258,7 @@ func verifyDownloadedFile(t *testing.T, expectedSanitizedFileNames []string, act
 
 	actualSanitizedFileContent := string(actualSanitizedFileContentRaw)
 
-	for _, expectedSanitizedFileName := range expectedSanitizedFileNames {
+	for i, expectedSanitizedFileName := range expectedSanitizedFileNames {
 		expectedSanitizedFileContentRaw, err := os.ReadFile(expectedSanitizedFileName)
 		if err != nil {
 			t.Errorf("Could not open file %s for reading: %s", expectedSanitizedFileName, err)
@@ -269,6 +269,9 @@ func verifyDownloadedFile(t *testing.T, expectedSanitizedFileNames []string, act
 		diffs = dmp.DiffMain(expectedSanitizedFileContent, actualSanitizedFileContent, false)
 		levenshteinDistance = dmp.DiffLevenshtein(diffs)
 		t.Logf("DiffLevenshtein distance of %d for expected file %s", dmp.DiffLevenshtein(diffs), expectedSanitizedFileName)
+		if i == 0 {
+			t.Logf("diff with expected file %s: \n %s", expectedSanitizedFileName, diffs)
+		}
 		if levenshteinDistance == 0 {
 			return nil
 		}
