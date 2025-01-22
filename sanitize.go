@@ -2,6 +2,8 @@ package main
 
 //goland:noinspection GoUnsortedImport
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/PaesslerAG/jsonpath"
@@ -12,7 +14,6 @@ import (
 	"go/types"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -61,10 +62,11 @@ func getSecretReplacement(secret string, secretPatterns []string, prefix string)
 		}
 		return secretReplacement, nil
 	}
-	numberOfExistingSecretReplacements := len(secretReplacementsMap)
 
-	suffix := strconv.Itoa(numberOfExistingSecretReplacements + 1)
-	secretReplacement = prefix + suffix
+	hasher := sha256.New()
+	hasher.Write([]byte(secret))
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	secretReplacement = prefix + "_" + hash
 	secretReplacementsMap[secret] = secretReplacement
 	return secretReplacementsMap[secret], nil
 }
@@ -106,7 +108,7 @@ func runRuleDetectionTask(ruleDetectionTaskInput RuleDetectionTaskInput, channel
 			println("\tjsonPath=", jsonPath, "value=", valueStr)
 			replacementValue := ""
 			if ruleInfo.Action == "contextual_replacement" {
-				secretPatterns := []string{secretPrefix + "\\d+", removedSecretReplacement}
+				secretPatterns := []string{secretPrefix + "_\\w+", removedSecretReplacement}
 				replacementValue, err = getSecretReplacement(valueStr, secretPatterns, secretPrefix)
 				if err != nil {
 					errorFollowUp(err, false)
