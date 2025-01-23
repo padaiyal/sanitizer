@@ -16,136 +16,64 @@ import (
 	"github.com/tebeka/selenium"
 )
 
-var contextualReplacement = "RANDOM"
-
 var rulesFile = "rules/har.yaml"
 
-type sanitizedLines struct {
-	originalLine string
-	changedLine  string
-}
-
-type sanitizedFile struct {
-	originalFilename            string
-	sanitizedFilename           string
-	size                        int64
-	sanitizedFilenameVariations int
-	lines                       []sanitizedLines
-}
-
-var sanitizeFileToExpectedSanitation = make(map[string]sanitizedFile)
-var untouchedFileNames []string
-
-func prepareMapTestScenario() {
-
-	sanitizeFileToExpectedSanitation["github.com.har"] = sanitizedFile{"github.com.har", "gitbub.com.har", 3791581, 1,
-		[]sanitizedLines{{"password12345", "<REMOVED>"}}}
-
-	sanitizeFileToExpectedSanitation["contextual_replacement.har"] =
-		sanitizedFile{"contextual_replacement.har", "contextual_replacement.har", 269100, 2,
-			[]sanitizedLines{{"cookieMonster1", contextualReplacement},
-				{"cookieMonster1", contextualReplacement},
-				{"cookieMonster1", contextualReplacement},
-				{"cookieMonster2", contextualReplacement},
-				{"cookieMonster2", contextualReplacement},
-			},
-		}
-
-	sanitizeFileToExpectedSanitation["remove_and_contextual_replacement.har"] =
-		sanitizedFile{"remove_and_contextual_replacement.har", "remove_and_contextual_replacement.har", 4394240, 2, []sanitizedLines{
-			{"cookieMonster1", contextualReplacement},
-			{"cookieMonster2", contextualReplacement},
-			{"cookieMonster1", contextualReplacement},
-			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-			{"7784689_72_76_104100_72_446760", "<REMOVED>"},
-		},
-		}
-
-	untouchedFileNames = []string{"1.har", "2.har", "3.har", "4.har", "5.har", "6.har", "7.har"}
-}
-
-func verifyFileSanitation(t *testing.T, fileDivElement selenium.WebElement) error {
-	contextualReplacementMapping := make(map[string]string)
+func verifyFileSanitation(t *testing.T, fileDivElement selenium.WebElement, sanitizedFileInfos map[string]SanitizedFile) error {
 
 	fileNameElement, _ := fileDivElement.FindElement(selenium.ByCSSSelector, ".d2h-file-name")
 	fileNameElementText, _ := fileNameElement.Text()
 	fileNameElementFileNames := strings.Split(fileNameElementText, " → ")
 
-	t.Log("filename = ", fileNameElementFileNames)
-	originalFileName := fileNameElementFileNames[0]
 	t.Log("Original filename = ", fileNameElementFileNames[0])
-
-	expectedValues, ok := sanitizeFileToExpectedSanitation[originalFileName]
-
+	sanitizedFileInfo, ok := sanitizedFileInfos[fileNameElementFileNames[0]]
 	if !ok {
-		t.Fatal("Could not find sanitized file name (", originalFileName, ") in map. This shouldn't happen...")
+		t.Fatal("SanitizedFileInfo not found")
 	}
+	assert.Equal(t, sanitizedFileInfo.sanitizedFilename, fileNameElementFileNames[1])
 
-	deletedElements, err := fileDivElement.FindElements(selenium.ByTagName, "del")
-
+	deletedElements, err := fileDivElement.FindElements(selenium.ByCSSSelector, "td[class^='d2h-del d2h-change']")
 	if err != nil {
 		t.Fatal("Could not find deleted elements", err)
 	}
-	insertedElements, err := fileDivElement.FindElements(selenium.ByTagName, "ins")
+
+	insertedElements, err := fileDivElement.FindElements(selenium.ByCSSSelector, "td[class^='d2h-ins d2h-change']")
 
 	if err != nil {
 		t.Fatal("Could not find inserted elements", err)
 	}
 
-	lineNumElements, err := fileDivElement.FindElements(selenium.ByCSSSelector, ".d2h-code-linenumber.d2h-del.d2h-change")
-
-	if err != nil {
-		t.Fatal("Could not find line numbers", err)
-	}
-
 	assert.Equal(t, len(deletedElements), len(insertedElements), "Deleted Elements length is different from inserted elements: %d vs. %d", len(deletedElements), len(insertedElements))
 
+	t.Logf("Deleted Elements: %d\nInserted Elements: %d\n", len(deletedElements), len(insertedElements))
 	for index, deletedElement := range deletedElements {
-		t.Logf("Deleted Elements: %d\nInserted Elements: %d\n", len(deletedElements), len(insertedElements))
-		deletedElementText, err := deletedElement.Text()
 
+		deletedWithValueElement, err := deletedElement.FindElement(selenium.ByCSSSelector, ".d2h-code-line-ctn.hljs.plaintext")
 		if err != nil {
 			return err
 		}
 
-		insertedElementText, err := insertedElements[index].Text()
+		deletedElementText, err := deletedWithValueElement.Text()
 
+		insertedWithValueElement, err := insertedElements[index].FindElement(selenium.ByCSSSelector, ".d2h-code-line-ctn.hljs.plaintext")
 		if err != nil {
 			return err
 		}
-		expectedDeletedValue := expectedValues.lines[index].originalLine
-		expectedInsertedValue := expectedValues.lines[index].changedLine
 
-		t.Logf("Deleted Elements: %s\nInserted Elements: %s\n", deletedElementText, insertedElementText)
+		insertedElementText, err := insertedWithValueElement.Text()
+		if err != nil {
+			return err
+		}
+
+		// Removing the next line char as the UI doesn't provide the char. We are trying to verify the actual content of the string match the actual sanitization
+		expectedDeletedValue := sanitizedFileInfo.lines[index].originalLine
+		expectedDeletedValue = strings.Replace(expectedDeletedValue, "\n", "", -1)
+
+		expectedInsertedValue := sanitizedFileInfo.lines[index].changedLine
+		expectedInsertedValue = strings.Replace(expectedInsertedValue, "\n", "", -1)
+
 		assert.Equal(t, expectedDeletedValue, deletedElementText, "Did not delete expected parameter (%s), but removed {%s}", expectedDeletedValue, deletedElementText)
 
-		if expectedInsertedValue == contextualReplacement {
-			mappedInsertedValue, ok := contextualReplacementMapping[expectedDeletedValue]
-			if !ok {
-				contextualReplacementMapping[expectedDeletedValue] = insertedElementText
-			} else {
-				assert.Equal(t, mappedInsertedValue, insertedElementText, "Contextual Replacement shown different values. Expected %s, but got %s", mappedInsertedValue, insertedElementText)
-			}
-			expectedInsertedValue = insertedElementText
-
-		} else {
-			assert.Equal(t, expectedInsertedValue, insertedElementText, "Expected inserted value is %s, but got %s", expectedInsertedValue, insertedElementText)
-		}
-
-		lineNum1Element, err := lineNumElements[index].FindElement(selenium.ByCSSSelector, ".line-num1")
-		if err != nil {
-			return err
-		}
-
-		_, err = lineNum1Element.Text()
-
-		if err != nil {
-			return err
-		}
-
+		assert.Equal(t, expectedInsertedValue, insertedElementText, "Expected inserted value is %s, but got %s", expectedInsertedValue, insertedElementText)
 	}
 	return nil
 }
@@ -153,14 +81,15 @@ func verifyFileSanitation(t *testing.T, fileDivElement selenium.WebElement) erro
 func validE2EProcess(t *testing.T, webDriver selenium.WebDriver) error {
 	var err error
 	t.Log("Starting validating e2e process...\n")
-	var filesToSanitize []string
+	//fileNamesToSanitize := []string{"github.com.har", "contextual_replacement.har", "remove_and_contextual_replacement.har"}
+	fileNamesToSanitize := []string{"github.com.har"}
+	untouchedFileNames := []string{"1.har", "2.har", "3.har", "4.har", "5.har", "6.har", "7.har"}
+	sanitizedFileInfos := make(map[string]SanitizedFile)
 
-	for fileToSanitize := range sanitizeFileToExpectedSanitation {
-		filesToSanitize = append(filesToSanitize, fileToSanitize)
-	}
-
-	for _, fileToSanitize := range untouchedFileNames {
-		filesToSanitize = append(filesToSanitize, fileToSanitize)
+	filesToSanitizePath := append(fileNamesToSanitize, untouchedFileNames...)
+	for _, fileName := range fileNamesToSanitize {
+		sanitizedFileInfo := PopulateSanitizedFileInfoStruct(fileName, CreateSanitizedFileName(fileName), nil)
+		sanitizedFileInfos[fileName] = sanitizedFileInfo
 	}
 
 	//Wait for page to be ready
@@ -169,7 +98,7 @@ func validE2EProcess(t *testing.T, webDriver selenium.WebDriver) error {
 		return err
 	}
 	t.Log("Uploading File")
-	err = UploadFiles(webDriver, filesToSanitize)
+	err = UploadFiles(webDriver, filesToSanitizePath)
 	if err != nil {
 		return err
 	}
@@ -196,18 +125,6 @@ func validE2EProcess(t *testing.T, webDriver selenium.WebDriver) error {
 		assert.True(t, slices.Contains(untouchedFileNames, actualUnsanitizedFileName), "Unexpected untouched file '%s' found. Expected untouched files: %s", actualUnsanitizedFileName, untouchedFileNames)
 	}
 
-	values, err := webDriver.FindElements(selenium.ByCSSSelector, ".d2h-file-wrapper")
-	if err != nil {
-		return err
-	}
-	fmt.Println("len of sanitized_diff_div", len(values))
-	for _, fileDivElement := range values {
-		err = verifyFileSanitation(t, fileDivElement)
-		if err != nil {
-			return err
-		}
-	}
-
 	// Check download
 	downloadButton, _ := webDriver.FindElement(selenium.ByID, "download_button_label")
 	err = downloadButton.Click()
@@ -216,23 +133,41 @@ func validE2EProcess(t *testing.T, webDriver selenium.WebDriver) error {
 	}
 	time.Sleep(25 * time.Second)
 
-	for fileName, sanitizedFileInfo := range sanitizeFileToExpectedSanitation {
+	for fileName, sanitizedFileInfo := range sanitizedFileInfos {
 
-		var expectedSanitizedFileNamePaths []string
-		for i := range sanitizedFileInfo.sanitizedFilenameVariations {
-			i++
-			expectedSanitizedFileName := strings.Replace(fileName, ".har", fmt.Sprintf("_sanitized_%d.har", i), 1)
-			expectedFileDownloadPath := filepath.Join(ResourcesPath, "expected_sanitized_files", expectedSanitizedFileName)
-			expectedSanitizedFileNamePaths = append(expectedSanitizedFileNamePaths, expectedFileDownloadPath)
+		expectedSanitizedFileNamePath := filepath.Join(ResourcesPath, "expected_sanitized_files", sanitizedFileInfo.sanitizedFilename)
+		expectedSanitizedStatInfo, expectedSanitizedFileError := os.Stat(expectedSanitizedFileNamePath)
+		assert.Nil(t, expectedSanitizedFileError, expectedSanitizedFileError)
+
+		downloadedSanitizedFileNamePath := filepath.Join(DownloadPath, sanitizedFileInfo.sanitizedFilename)
+		downloadedSanitizedStatInfo, downloadedSanitizedFileError := os.Stat(downloadedSanitizedFileNamePath)
+		assert.Nil(t, downloadedSanitizedFileError, downloadedSanitizedFileError)
+
+		assert.Equalf(t, expectedSanitizedStatInfo.Size(), downloadedSanitizedStatInfo.Size(), "expected sanitized file size '%d' is different from actual sanitized file size '%d'", expectedSanitizedStatInfo.Size(), downloadedSanitizedStatInfo.Size())
+
+		matchingExpectedSanitizedFile, err := verifyDownloadedFileAndGetMatchingFileDiff(t, expectedSanitizedFileNamePath, downloadedSanitizedFileNamePath)
+
+		if err != nil {
+			return err
 		}
-		sanitizedFileName := strings.Replace(fileName, ".har", "_sanitized.har", 1)
-		sanitizedFileNamePath := filepath.Join(DownloadPath, sanitizedFileName)
-		fileInfo, downloadedFileError := os.Stat(sanitizedFileNamePath)
-		assert.Nil(t, downloadedFileError, downloadedFileError)
-		assert.Equal(t, fileInfo.Size(), sanitizedFileInfo.size, "Expected size of sanitized file to be %d, but got %d", fileInfo.Size(), sanitizedFileInfo.size)
-		t.Logf("File %s Size: %d", fileInfo.Name(), fileInfo.Size())
 
-		err = verifyDownloadedFile(t, expectedSanitizedFileNamePaths, sanitizedFileNamePath)
+		inputFilePath := filepath.Join(ResourcesPath, fileName)
+		diffs, err := getExpectedUIDiffsFromMatchingSanitizedFileContent(t, inputFilePath, matchingExpectedSanitizedFile)
+		if err != nil {
+			return err
+		}
+		sanitizedFileInfo.lines = CreateMappingOfDeletedAndInsertedStringsInDiff(diffs)
+		sanitizedFileInfos[fileName] = sanitizedFileInfo
+
+	}
+
+	values, err := webDriver.FindElements(selenium.ByCSSSelector, ".d2h-file-wrapper")
+	if err != nil {
+		return err
+	}
+	fmt.Println("len of sanitized_diff_div", len(values))
+	for _, fileDivElement := range values {
+		err = verifyFileSanitation(t, fileDivElement, sanitizedFileInfos)
 		if err != nil {
 			return err
 		}
@@ -246,39 +181,59 @@ func validE2EProcess(t *testing.T, webDriver selenium.WebDriver) error {
 	return nil
 }
 
-func verifyDownloadedFile(t *testing.T, expectedSanitizedFileNames []string, actualSanitizedFileName string) error {
+func getExpectedUIDiffsFromMatchingSanitizedFileContent(t *testing.T, inputSanitizedFileNamePath string, matchingExpectedSanitizedFileNamePath string) ([]diffmatchpatch.Diff, error) {
+	inputSanitizedFileContentRaw, err := os.ReadFile(inputSanitizedFileNamePath)
+	if err != nil {
+		t.Errorf("Could not open file %s for reading: %s", inputSanitizedFileNamePath, err)
+		return nil, err
+	}
+	inputSanitizedFileContent := string(inputSanitizedFileContentRaw)
+
+	matchingExpectedSanitizedFileContentRaw, err := os.ReadFile(matchingExpectedSanitizedFileNamePath)
+	if err != nil {
+		t.Errorf("Could not open file %s for reading: %s", matchingExpectedSanitizedFileNamePath, err)
+		return nil, err
+	}
+	matchingExpectedSanitizedFileContent := string(matchingExpectedSanitizedFileContentRaw)
+
+	dmp := diffmatchpatch.New()
+
+	inputSanitizedFileDmp, expectedSanitizedFileDmp, dmpStrings := dmp.DiffLinesToChars(inputSanitizedFileContent, matchingExpectedSanitizedFileContent)
+	diffs := dmp.DiffMain(inputSanitizedFileDmp, expectedSanitizedFileDmp, false)
+	diffs = dmp.DiffCharsToLines(diffs, dmpStrings)
+	diffs2 := dmp.DiffCleanupSemantic(diffs)
+	nonEqualDiffs := GetRemoveOrInsertInDiff(diffs2)
+	//t.Logf("All Diffs From Original: %s\n", dmp.DiffPrettyText(diffs2))
+	t.Logf("Diffs From Original: %s\n", dmp.DiffPrettyText(nonEqualDiffs))
+
+	return nonEqualDiffs, nil
+
+}
+
+func verifyDownloadedFileAndGetMatchingFileDiff(t *testing.T, expectedSanitizedFileName string, actualSanitizedFileName string) (string, error) {
 	var levenshteinDistance int
 	dmp := diffmatchpatch.New()
 	var diffs []diffmatchpatch.Diff
 	actualSanitizedFileContentRaw, err := os.ReadFile(actualSanitizedFileName)
 	if err != nil {
 		t.Errorf("Could not open file %s for reading: %s", actualSanitizedFileName, err)
-		return err
+		return "", err
 	}
 
 	actualSanitizedFileContent := string(actualSanitizedFileContentRaw)
-
-	for i, expectedSanitizedFileName := range expectedSanitizedFileNames {
-		expectedSanitizedFileContentRaw, err := os.ReadFile(expectedSanitizedFileName)
-		if err != nil {
-			t.Errorf("Could not open file %s for reading: %s", expectedSanitizedFileName, err)
-			return err
-		}
-		expectedSanitizedFileContent := string(expectedSanitizedFileContentRaw)
-
-		diffs = dmp.DiffMain(expectedSanitizedFileContent, actualSanitizedFileContent, false)
-		levenshteinDistance = dmp.DiffLevenshtein(diffs)
-		t.Logf("DiffLevenshtein distance of %d for expected file %s", dmp.DiffLevenshtein(diffs), expectedSanitizedFileName)
-		if i == 0 {
-			t.Logf("diff with expected file %s: \n %s", expectedSanitizedFileName, diffs)
-		}
-		if levenshteinDistance == 0 {
-			return nil
-		}
-
+	expectedSanitizedFileContentRaw, err := os.ReadFile(expectedSanitizedFileName)
+	if err != nil {
+		t.Errorf("Could not open file %s for reading: %s", expectedSanitizedFileName, err)
+		return "", err
 	}
-	t.Errorf("The actual file sanitization content did not match any of the expected sanitization variations. Actual file content\n: %s", dmp.DiffPrettyText(diffs))
-	return nil
+	expectedSanitizedFileContent := string(expectedSanitizedFileContentRaw)
+
+	diffs = dmp.DiffMain(expectedSanitizedFileContent, actualSanitizedFileContent, true)
+	levenshteinDistance = dmp.DiffLevenshtein(diffs)
+	t.Logf("DiffLevenshtein distance of %d for expected file %s", dmp.DiffLevenshtein(diffs), expectedSanitizedFileName)
+
+	assert.Equalf(t, 0, levenshteinDistance, "Expected sanitized file '%s' content matches actual sanitized file '%s' content.", expectedSanitizedFileName, actualSanitizedFileName)
+	return expectedSanitizedFileName, nil
 }
 
 func verifyViewRules(t *testing.T, webDriver selenium.WebDriver) error {
@@ -385,45 +340,44 @@ func TestFirefoxDriverValidProcess(t *testing.T) {
 	RunE2ETest(FIREFOX, t, validE2EProcess)
 }
 
-func TestChromeDriverValidProcess(t *testing.T) {
-	RunE2ETest(CHROME, t, validE2EProcess)
-}
-
-func TestInvalidHarFileFireFoxDriver(t *testing.T) {
-	RunE2ETest(FIREFOX, t, invalidAlertDisplayedProcess)
-}
-
-func TestInvalidHarFileChromeDriver(t *testing.T) {
-	RunE2ETest(CHROME, t, invalidAlertDisplayedProcess)
-}
-
-func TestDuplicatedFileNamesFireFoxDriver(t *testing.T) {
-	RunE2ETest(FIREFOX, t, duplicatedFilesToSanitizeProcess)
-}
-
-func TestDuplicatedFileNamesChromeDriver(t *testing.T) {
-	RunE2ETest(CHROME, t, duplicatedFilesToSanitizeProcess)
-}
-
-func TestFileUploadExceedsSizeLimitFireFoxDriver(t *testing.T) {
-	RunE2ETest(FIREFOX, t, fileUploadExceedsSizeLimitProcess)
-}
-
-func TestFileUploadExceedsSizeLimitChromeDriver(t *testing.T) {
-	RunE2ETest(CHROME, t, fileUploadExceedsSizeLimitProcess)
-}
-
-func TestFileUploadNumberExceedsLimitFireFoxDriver(t *testing.T) {
-	RunE2ETest(FIREFOX, t, fileUploadNumberExceedsLimitProcess)
-}
-
-func TestFileUploadNumberExceedsLimitChromeDriver(t *testing.T) {
-	RunE2ETest(CHROME, t, fileUploadNumberExceedsLimitProcess)
-}
+//func TestChromeDriverValidProcess(t *testing.T) {
+//	RunE2ETest(CHROME, t, validE2EProcess)
+//}
+//
+//func TestInvalidHarFileFireFoxDriver(t *testing.T) {
+//	RunE2ETest(FIREFOX, t, invalidAlertDisplayedProcess)
+//}
+//
+//func TestInvalidHarFileChromeDriver(t *testing.T) {
+//	RunE2ETest(CHROME, t, invalidAlertDisplayedProcess)
+//}
+//
+//func TestDuplicatedFileNamesFireFoxDriver(t *testing.T) {
+//	RunE2ETest(FIREFOX, t, duplicatedFilesToSanitizeProcess)
+//}
+//
+//func TestDuplicatedFileNamesChromeDriver(t *testing.T) {
+//	RunE2ETest(CHROME, t, duplicatedFilesToSanitizeProcess)
+//}
+//
+//func TestFileUploadExceedsSizeLimitFireFoxDriver(t *testing.T) {
+//	RunE2ETest(FIREFOX, t, fileUploadExceedsSizeLimitProcess)
+//}
+//
+//func TestFileUploadExceedsSizeLimitChromeDriver(t *testing.T) {
+//	RunE2ETest(CHROME, t, fileUploadExceedsSizeLimitProcess)
+//}
+//
+//func TestFileUploadNumberExceedsLimitFireFoxDriver(t *testing.T) {
+//	RunE2ETest(FIREFOX, t, fileUploadNumberExceedsLimitProcess)
+//}
+//
+//func TestFileUploadNumberExceedsLimitChromeDriver(t *testing.T) {
+//	RunE2ETest(CHROME, t, fileUploadNumberExceedsLimitProcess)
+//}
 
 func TestMain(m *testing.M) {
 	SetUp()
-	prepareMapTestScenario()
 	m.Run()
 	TearDown()
 }

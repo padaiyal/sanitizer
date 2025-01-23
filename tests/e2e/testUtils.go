@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/tebeka/selenium"
 	"github.com/tebeka/selenium/chrome"
 	"github.com/tebeka/selenium/firefox"
@@ -28,6 +29,17 @@ var seleniumPort int
 var server *http.Server
 var MaxWaitTimeout time.Duration
 
+type SanitizedLines struct {
+	originalLine string
+	changedLine  string
+}
+
+type SanitizedFile struct {
+	originalFilename  string
+	sanitizedFilename string
+	lines             []SanitizedLines
+}
+
 func GetDriver(driverType string) (*selenium.Service, selenium.WebDriver, error) {
 	var service *selenium.Service
 	var err error
@@ -37,7 +49,8 @@ func GetDriver(driverType string) (*selenium.Service, selenium.WebDriver, error)
 	caps := selenium.Capabilities{}
 	prefs := make(map[string]interface{})
 	osType := runtime.GOOS
-	args := []string{"--headless"}
+	//args := []string{"--headless"}
+	args := []string{}
 	path, err := filepath.Abs("../../depot/webdriver")
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting absolute path of depot/webdriver: %s", err)
@@ -211,12 +224,13 @@ func UploadFiles(webDriver selenium.WebDriver, filesToSanitize []string) error {
 func IsUploadButtonReady(webDriver selenium.WebDriver) (bool, error) {
 	uploadButtonElement, _ := webDriver.FindElement(selenium.ByID, "upload_button")
 	if uploadButtonElement != nil {
-		isReady, err := uploadButtonElement.GetAttribute("ready")
+
+		isReady, err := uploadButtonElement.GetAttribute("accept")
 		// This means that the wasm script hasn't loaded yet...
 		if err != nil && strings.Contains(err.Error(), "nil return value") {
 			err = nil
 		}
-		return isReady == "true", err
+		return len(isReady) > 0, err
 	}
 	return false, nil
 }
@@ -258,4 +272,53 @@ func WaitForNewWindowsOpen(webDriver selenium.WebDriver, windowsToWaitNumber int
 		return fmt.Errorf("number of expected windows did not open after %v seconds. Error: %s", timeout, err)
 	}
 	return nil
+}
+
+func GetRemoveOrInsertInDiff(diffs []diffmatchpatch.Diff) []diffmatchpatch.Diff {
+	var nonEqualDiffs []diffmatchpatch.Diff
+	for _, diff := range diffs {
+		switch diff.Type {
+		case diffmatchpatch.DiffDelete, diffmatchpatch.DiffInsert:
+			nonEqualDiffs = append(nonEqualDiffs, diff)
+		default:
+
+		}
+	}
+	return nonEqualDiffs
+}
+
+func CreateMappingOfDeletedAndInsertedStringsInDiff(diffs []diffmatchpatch.Diff) []SanitizedLines {
+	var sanitizedLines []SanitizedLines
+	sanitizedLine := SanitizedLines{}
+
+	for _, diff := range diffs {
+
+		if diff.Type == diffmatchpatch.DiffDelete && len(sanitizedLine.originalLine) > 0 && len(sanitizedLine.changedLine) > 0 {
+			sanitizedLines = append(sanitizedLines, sanitizedLine)
+			sanitizedLine = SanitizedLines{}
+		}
+
+		switch diff.Type {
+		case diffmatchpatch.DiffDelete:
+			sanitizedLine.originalLine += diff.Text
+		case diffmatchpatch.DiffInsert:
+			sanitizedLine.changedLine += diff.Text
+		default:
+		}
+
+	}
+	sanitizedLines = append(sanitizedLines, sanitizedLine)
+	return sanitizedLines
+}
+
+func PopulateSanitizedFileInfoStruct(originalFileName string, SanitizedFileName string, diffs []diffmatchpatch.Diff) SanitizedFile {
+	return SanitizedFile{
+		originalFilename:  originalFileName,
+		sanitizedFilename: SanitizedFileName,
+		lines:             CreateMappingOfDeletedAndInsertedStringsInDiff(diffs),
+	}
+}
+
+func CreateSanitizedFileName(originalFileName string) string {
+	return strings.Replace(originalFileName, ".har", "_sanitized.har", 1)
 }

@@ -231,8 +231,6 @@ func main() {
 	}
 	println("Allowed file formats: ", allowedFileFormats)
 	uploadButton := document.Call("getElementById", "upload_button")
-	// Restricts the file types that can be loaded based on rule set availability.
-	uploadButton.Call("setAttribute", "accept", allowedFileFormats)
 	// Set the callback to invoke when a file is selected.
 	uploadButton.Set("oninput", js.FuncOf(sanitizeCallbackFromJS))
 	/**
@@ -240,7 +238,10 @@ func main() {
 	Mainly used for testing to avoid race condition between loading the wasm file and uploading files.
 	Tests will fail if they try to upload files while the upload button callback is not set yet.
 	*/
-	uploadButton.Call("setAttribute", "ready", true)
+	//uploadButton.Call("setAttribute", "ready", true)
+
+	// Restricts the file types that can be loaded based on rule set availability.
+	uploadButton.Call("setAttribute", "accept", allowedFileFormats)
 
 	// Keep the script running for callbacks to be processed.
 	select {}

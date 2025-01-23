@@ -3,3 +3,4 @@
 vendor
 *.wasm
 go.sum
+depot/
