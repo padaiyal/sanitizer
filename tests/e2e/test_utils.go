@@ -49,7 +49,7 @@ type SanitizedFile struct {
 Generic methods for running the tests
 */
 
-func GetDriver(driverType string) (*selenium.Service, selenium.WebDriver, error) {
+func GetDriver(driverType string) (*selenium.Service, selenium.WebDriver) {
 	var service *selenium.Service
 	var err error
 	var fullPath string
@@ -58,12 +58,13 @@ func GetDriver(driverType string) (*selenium.Service, selenium.WebDriver, error)
 	caps := selenium.Capabilities{}
 	prefs := make(map[string]interface{})
 	osType := runtime.GOOS
-	args := []string{"--headless"}
+	//args := []string{"--headless"}
 	// Uncomment to test locally
-	//args := []string{}
+	args := []string{}
 	path, err := filepath.Abs("../../depot/webdriver")
 	if err != nil {
-		return nil, nil, fmt.Errorf("error getting absolute path of depot/webdriver: %s", err)
+
+		log.Fatalf("error getting absolute path of depot/webdriver: %s", err)
 	}
 
 	if driverType == FIREFOX {
@@ -87,7 +88,7 @@ func GetDriver(driverType string) (*selenium.Service, selenium.WebDriver, error)
 		caps.AddChrome(chrome.Capabilities{Path: os.Getenv("CHROME_BROWSER_PATH"), Prefs: prefs, Args: args})
 
 	} else {
-		return nil, nil, fmt.Errorf("unsupported driver type: %s", driverType)
+		log.Fatalf("unsupported driver type: %s", driverType)
 	}
 
 	driver, err := selenium.NewRemote(caps, urlPrefix)
@@ -106,7 +107,7 @@ func GetDriver(driverType string) (*selenium.Service, selenium.WebDriver, error)
 		log.Fatal("Error (Get):", err)
 	}
 
-	return service, driver, nil
+	return service, driver
 }
 
 func RunHtmlServer() {
@@ -167,6 +168,25 @@ func ResetEnvironment() {
 
 	if err != nil {
 		log.Fatal("Could create download path (", DownloadPath, ")", err)
+	}
+}
+
+func RunE2ETestParallel(t *testing.T, browser string, resetEnvironment bool, testFunc func(*testing.T, selenium.WebDriver) error) {
+	if resetEnvironment {
+		ResetEnvironment()
+	}
+	t.Parallel()
+	service, driver := GetDriver(browser)
+
+	err := testFunc(t, driver)
+	if err != nil {
+		log.Fatalf("Error running test: %s", err)
+	}
+	t.Log("Finished running `TestFirefoxDriverValidProcess'")
+
+	CloseWebDriverAndService(driver, service)
+	if resetEnvironment {
+		ResetEnvironment()
 	}
 }
 
