@@ -6,11 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/sergi/go-diff/diffmatchpatch"
-	"github.com/stretchr/testify/assert"
-	"github.com/tebeka/selenium"
-	"github.com/tebeka/selenium/chrome"
-	"github.com/tebeka/selenium/firefox"
 	"log"
 	"mime"
 	"net/http"
@@ -21,10 +16,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
+	"github.com/stretchr/testify/assert"
+	"github.com/tebeka/selenium"
+	"github.com/tebeka/selenium/chrome"
+	"github.com/tebeka/selenium/firefox"
 )
 
-const FIREFOX string = "Firefox"
-const CHROME string = "Chrome"
+const FIREFOX string = "firefox"
+const CHROME string = "chrome"
 
 var currentPath string
 var DownloadPath string

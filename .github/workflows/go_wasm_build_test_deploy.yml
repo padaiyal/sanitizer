@@ -48,7 +48,9 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: 'padaiyal/depot'
-        path: ./depot/
+        path: ./depot
+        sparse-checkout: 'webdriver'
+        sparse-checkout-cone-mode: false
 
     - name: Set up Chrome Browser
       id: setup-chrome
